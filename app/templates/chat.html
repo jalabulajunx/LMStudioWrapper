@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid h-100">
+    <div class="row h-100">
+        <!-- Left panel - Chat history -->
+        <div class="col-md-3 bg-light border-end p-0">
+            <div class="d-flex flex-column h-100">
+                <div class="p-3 border-bottom">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Chats</h5>
+                        <button class="btn btn-sm btn-outline-secondary" id="new-chat">
+                            <i class="bi bi-plus-lg"></i> New Chat
+                        </button>
+                    </div>
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control" id="search-conversations" placeholder="Search chats...">
+                    </div>
+                </div>
+                <div class="chat-history flex-grow-1 overflow-auto" id="chat-history">
+                    <!-- Chat history will be populated here -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right panel - Chat conversation -->
+        <div class="col-md-9 p-0 d-flex flex-column h-100">
+            <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <select class="form-select me-2" id="task-selector">
+                        <option value="general">General Chat</option>
+                        <option value="music">Music Query</option>
+                    </select>
+                </div>
+                <div>
+                    <button class="btn btn-outline-secondary btn-sm" id="export-chat">
+                        <i class="bi bi-download"></i> Export
+                    </button>
+                </div>
+            </div>
+            <div class="chat-messages flex-grow-1 overflow-auto p-3">
+                <!-- Messages will be populated here -->
+            </div>
+            <div class="chat-input border-top p-3">
+                <form id="chat-form" class="d-flex gap-2">
+                    <textarea 
+                        class="form-control" 
+                        id="message-input" 
+                        placeholder="Type your message..." 
+                        rows="1"
+                        style="resize: none;"
+                    ></textarea>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-send"></i>
+                    </button>
+                    <button type="button" class="btn btn-danger d-none" id="stop-button">
+                        <i class="bi bi-stop-fill"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast for notifications -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="notification-toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto">Notification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='/js/chat.js') }}"></script>
+{% endblock %}

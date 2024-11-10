@@ -1,0 +1,32 @@
+# Directory structure
+"""
+chat_app/
+├── README.md
+├── requirements.txt
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── config.py
+│   ├── database.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── chat.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── chat.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── llm_service.py
+│   ├── static/
+│   │   ├── css/
+│   │   │   └── style.css
+│   │   └── js/
+│   │       └── chat.js
+│   └── templates/
+│       ├── base.html
+│       └── chat.html
+└── tests/
+    ├── __init__.py
+    ├── test_chat.py
+    └── conftest.py
+"""

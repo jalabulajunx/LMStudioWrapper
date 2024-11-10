@@ -1,0 +1,75 @@
+/* app/static/css/style.css */
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
+.chat-messages {
+    height: calc(100vh - 100px);
+}
+
+.message {
+    max-width: 80%;
+    margin-bottom: 1rem;
+}
+
+.user-message {
+    background-color: #e9ecef;
+    padding: 1rem;
+    border-radius: 15px;
+    margin-left: auto;
+}
+
+.assistant-message {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 15px;
+    margin-right: auto;
+}
+
+.chat-history {
+    height: calc(100vh - 70px);
+}
+.message {
+    max-width: 80%;
+    margin-bottom: 1rem;
+    word-wrap: break-word;
+}
+
+.message pre {
+    white-space: pre-wrap;
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.5rem;
+}
+
+.message code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+}
+
+.conversation-item {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.conversation-item:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.conversation-item.active {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.conversation-actions {
+    display: none;
+}
+
+.conversation-item:hover .conversation-actions {
+    display: block;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
