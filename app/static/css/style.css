@@ -30,24 +30,60 @@ html, body {
 .chat-history {
     height: calc(100vh - 70px);
 }
+
 .message {
+    position: relative;
     max-width: 80%;
     margin-bottom: 1rem;
-    word-wrap: break-word;
+    padding: 1rem;
+    border-radius: 15px;
 }
 
+.user-message {
+    background-color: #e9ecef;
+    margin-left: auto;
+}
+
+.assistant-message {
+    background-color: #f8f9fa;
+    margin-right: auto;
+}
+
+.message .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.message:hover .copy-btn {
+    opacity: 1;
+}
+
+.copy-btn:hover {
+    background-color: #dee2e6;
+}
+
+/* Add some spacing between message content and copy button */
+.message-content {
+    padding-right: 2rem;
+}
+
+/* Make sure code blocks are properly formatted in messages */
 .message pre {
-    white-space: pre-wrap;
     background-color: #f8f9fa;
     padding: 1rem;
     border-radius: 0.5rem;
+    overflow-x: auto;
 }
 
 .message code {
-    background-color: #f8f9fa;
+    background-color: rgba(0,0,0,0.05);
     padding: 0.2rem 0.4rem;
     border-radius: 0.25rem;
 }
+
 
 .conversation-item {
     cursor: pointer;

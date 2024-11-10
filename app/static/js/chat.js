@@ -8,6 +8,40 @@ $(document).ready(function() {
     let currentConversationId = null;
     let eventSource = null;
 
+
+    // Initialize by loading conversations and latest chat
+    loadConversations().then(() => {
+        loadLatestConversation();
+    });
+
+    //load latest conversation
+    async function loadLatestConversation() {
+        try {
+            const response = await fetch('/api/conversations');
+            const conversations = await response.json();
+            
+            if (conversations && conversations.length > 0) {
+                // Get the most recent conversation
+                const latestConv = conversations[0];
+                currentConversationId = latestConv.id;
+                
+                // Load its messages
+                const msgResponse = await fetch(`/api/conversations/${latestConv.id}`);
+                const data = await msgResponse.json();
+                
+                if (data.messages && Array.isArray(data.messages)) {
+                    data.messages.forEach(msg => {
+                        if (msg.content) appendMessage(msg.content, 'user');
+                        if (msg.response) appendMessage(msg.response, 'assistant');
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error loading latest conversation:', error);
+            showNotification('Failed to load conversation', 'error');
+        }
+    }
+
     // Conversation Management Functions
     async function loadConversations() {
         try {
@@ -63,18 +97,33 @@ $(document).ready(function() {
         }
     }
 
-    // Your existing message handling functions
+    // Append message
     function appendMessage(content, role) {
         const messageDiv = $('<div>')
             .addClass('message')
             .addClass(role + '-message');
-
+    
+        // Create message content div
+        const contentDiv = $('<div>').addClass('message-content');
         if (role === 'assistant') {
-            messageDiv.html(marked.parse(content));
+            contentDiv.html(marked.parse(content));
+            
+            // Add copy button for assistant messages
+            const copyBtn = $('<button>')
+                .addClass('btn btn-sm btn-outline-secondary copy-btn')
+                .html('<i class="bi bi-clipboard"></i>')
+                .attr('title', 'Copy response')
+                .on('click', function(e) {
+                    e.stopPropagation();
+                    copyToClipboard(content);
+                });
+                
+            messageDiv.append(contentDiv, copyBtn);
         } else {
-            messageDiv.text(content);
+            contentDiv.text(content);
+            messageDiv.append(contentDiv);
         }
-
+    
         chatMessages.append(messageDiv);
         chatMessages.scrollTop(chatMessages[0].scrollHeight);
         return messageDiv;
@@ -162,7 +211,14 @@ $(document).ready(function() {
 
     // Event Handlers for Conversation Management
     $('#new-chat').on('click', async function() {
-        await createNewConversation();
+        try {
+            await createNewConversation();
+            chatMessages.empty();  // Clear the chat area
+            messageInput.focus();  // Focus on input for better UX
+        } catch (error) {
+            console.error('Error creating new conversation:', error);
+            showNotification('Failed to create new conversation', 'error');
+        }
     });
 
     chatHistory.on('click', '.conversation-item', async function(e) {
@@ -172,13 +228,21 @@ $(document).ready(function() {
             
             try {
                 const response = await fetch(`/api/conversations/${convId}`);
-                const messages = await response.json();
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
                 
+                // Clear existing messages
                 chatMessages.empty();
-                messages.forEach(msg => {
-                    if (msg.content) appendMessage(msg.content, 'user');
-                    if (msg.response) appendMessage(msg.response, 'assistant');
-                });
+                
+                // Check if we have messages and they're in an array
+                if (data.messages && Array.isArray(data.messages)) {
+                    data.messages.forEach(msg => {
+                        if (msg.content) appendMessage(msg.content, 'user');
+                        if (msg.response) appendMessage(msg.response, 'assistant');
+                    });
+                }
                 
                 $('.conversation-item').removeClass('active');
                 $(this).addClass('active');
@@ -284,6 +348,7 @@ $(document).ready(function() {
         });
     });
 
+    //Export chat event handler
     $('#export-chat').on('click', async function() {
         if (!currentConversationId) {
             showNotification('No conversation to export', 'error');
@@ -293,41 +358,56 @@ $(document).ready(function() {
         try {
             const response = await fetch(`/api/conversations/${currentConversationId}`);
             if (!response.ok) {
-                throw new Error('Failed to fetch conversation data');
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            const messages = await response.json();
+            const data = await response.json();
             
+            // Create Export Content
             let exportContent = "# Chat Export\n\n";
-            exportContent += `Date: ${new Date().toLocaleString()}\n\n`;
+            exportContent += `Date: ${new Date().toLocaleString()}\n`;
             
-            messages.forEach(msg => {
-                if (msg.content) {
-                    exportContent += `**User**: ${msg.content}\n\n`;
-                }
-                if (msg.response) {
-                    exportContent += `**Assistant**: ${msg.response}\n\n`;
-                }
-            });
+            if (data.conversation && data.conversation.title) {
+                exportContent += `Title: ${data.conversation.title}\n`;
+            }
+            exportContent += "\n---\n\n";
             
-            // Create and trigger download
-            const blob = new Blob([exportContent], { type: 'text/markdown' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = `chat-export-${new Date().toISOString().slice(0,10)}.md`;
-            
-            document.body.appendChild(a);
-            a.click();
-            
-            // Cleanup
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            }, 100);
-            
-            showNotification('Chat exported successfully', 'success');
+            if (data.messages && Array.isArray(data.messages)) {
+                data.messages.forEach(msg => {
+                    const timestamp = new Date(msg.timestamp).toLocaleString();
+                    if (msg.content) {
+                        exportContent += `### User (${timestamp}):\n${msg.content}\n\n`;
+                    }
+                    if (msg.response) {
+                        exportContent += `### Assistant:\n${msg.response}\n\n`;
+                    }
+                    exportContent += "---\n\n";
+                });
+                
+                // Create and trigger download
+                const blob = new Blob([exportContent], { type: 'text/markdown' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                const fileName = data.conversation?.title 
+                    ? `${data.conversation.title}-${new Date().toISOString().slice(0,10)}.md`
+                    : `chat-export-${new Date().toISOString().slice(0,10)}.md`;
+                a.download = fileName;
+                
+                document.body.appendChild(a);
+                a.click();
+                
+                // Cleanup
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                }, 100);
+                
+                showNotification('Chat exported successfully', 'success');
+            } else {
+                throw new Error('No messages found in conversation');
+            }
         } catch (error) {
             console.error('Error exporting chat:', error);
             showNotification('Failed to export chat', 'error');
@@ -344,7 +424,7 @@ $(document).ready(function() {
     
 
     // Initialize
-    createNewConversation();
+    //createNewConversation();
     loadConversations();
 
     // Notification helper
@@ -356,5 +436,23 @@ $(document).ready(function() {
         
         const bsToast = new bootstrap.Toast(toast);
         bsToast.show();
+    }
+
+    // helper function for copying text to clipboard
+    function copyToClipboard(text) {
+        // Create temporary textarea
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        
+        try {
+            document.execCommand('copy');
+            showNotification('Copied to clipboard!', 'success');
+        } catch (err) {
+            showNotification('Failed to copy text', 'error');
+        } finally {
+            document.body.removeChild(textarea);
+        }
     }
 });
