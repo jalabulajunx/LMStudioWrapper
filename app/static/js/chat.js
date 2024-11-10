@@ -189,6 +189,74 @@ $(document).ready(function() {
         }
     });
 
+    // Rename conversation handler
+    chatHistory.on('click', '.rename-conv', async function(e) {
+        e.stopPropagation();  // Prevent triggering conversation click
+        const convItem = $(this).closest('.conversation-item');
+        const convId = convItem.data('conversation-id');
+        const titleElement = convItem.find('.conversation-title');
+        const currentTitle = titleElement.text().trim();
+        
+        const newTitle = prompt('Enter new conversation title:', currentTitle);
+        if (newTitle && newTitle !== currentTitle) {
+            try {
+                const response = await fetch(`/api/conversations/${convId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ title: newTitle })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to rename conversation');
+                }
+
+                await loadConversations();  // Refresh the conversation list
+                showNotification('Conversation renamed successfully', 'success');
+            } catch (error) {
+                console.error('Error renaming conversation:', error);
+                showNotification('Failed to rename conversation', 'error');
+            }
+        }
+    });
+
+    // Delete conversation handler
+    chatHistory.on('click', '.delete-conv', async function(e) {
+        e.stopPropagation();  // Prevent triggering conversation click
+        
+        const convItem = $(this).closest('.conversation-item');
+        const convId = convItem.data('conversation-id');
+        const isCurrentConv = convId === currentConversationId;
+        
+        if (!confirm('Are you sure you want to delete this conversation?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/conversations/${convId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete conversation');
+            }
+
+            if (isCurrentConv) {
+                // If we deleted the current conversation, create a new one
+                await createNewConversation();
+            } else {
+                // Otherwise just refresh the list
+                await loadConversations();
+            }
+            
+            showNotification('Conversation deleted successfully', 'success');
+        } catch (error) {
+            console.error('Error deleting conversation:', error);
+            showNotification('Failed to delete conversation', 'error');
+        }
+    });
+
     // Keep your existing stop button handler
     stopButton.on('click', function() {
         if (eventSource) {
@@ -217,13 +285,22 @@ $(document).ready(function() {
     });
 
     $('#export-chat').on('click', async function() {
-        if (!currentConversationId) return;
+        if (!currentConversationId) {
+            showNotification('No conversation to export', 'error');
+            return;
+        }
         
         try {
             const response = await fetch(`/api/conversations/${currentConversationId}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch conversation data');
+            }
+            
             const messages = await response.json();
             
             let exportContent = "# Chat Export\n\n";
+            exportContent += `Date: ${new Date().toLocaleString()}\n\n`;
+            
             messages.forEach(msg => {
                 if (msg.content) {
                     exportContent += `**User**: ${msg.content}\n\n`;
@@ -239,12 +316,18 @@ $(document).ready(function() {
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = url;
-            a.download = 'chat-export.md';
+            a.download = `chat-export-${new Date().toISOString().slice(0,10)}.md`;
+            
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
             
-            showNotification('Chat exported successfully!', 'success');
+            // Cleanup
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+            
+            showNotification('Chat exported successfully', 'success');
         } catch (error) {
             console.error('Error exporting chat:', error);
             showNotification('Failed to export chat', 'error');
