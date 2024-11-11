@@ -8,6 +8,7 @@ $(document).ready(function() {
     const chatHistory = $('#chat-history');
     let currentConversationId = null;
     let eventSource = null;
+    let currentResponseController = null;
 
     
     // Check authentication first
@@ -336,9 +337,13 @@ $(document).ready(function() {
         const responseDiv = appendMessage('', 'assistant');
         let fullResponse = '';
 
-        if (eventSource) {
-            eventSource.close();
+        // If there's an ongoing request, cancel it
+        if (currentResponseController) {
+            currentResponseController.abort();
         }
+
+        // Create new AbortController for this request
+        currentResponseController = new AbortController();
 
         try {
             const response = await fetch('/api/chat', {
@@ -350,7 +355,8 @@ $(document).ready(function() {
                 body: JSON.stringify({
                     message: message,
                     conversation_id: currentConversationId
-                })
+                }),
+                signal: currentResponseController.signal  // Add abort signal
             });
 
             const reader = response.body.getReader();
@@ -378,6 +384,7 @@ $(document).ready(function() {
                             if (parsed.error) {
                                 responseDiv.html(marked.parse('Error: ' + parsed.error));
                                 stopButton.addClass('d-none');
+                                currentResponseController = null;  // Clear controller
                                 break;
                             }
 
@@ -393,9 +400,16 @@ $(document).ready(function() {
                 }
             }
         } catch (error) {
-            console.error('Request error:', error);
-            responseDiv.html(marked.parse('Error: Failed to generate response'));
+            if (error.name === 'AbortError') {
+                console.log('Response generation stopped by user');
+                // You might want to append a message indicating the stop
+                responseDiv.append('<br><em>Generation stopped by user</em>');
+            } else {
+                console.error('Request error:', error);
+                responseDiv.html(marked.parse('Error: Failed to generate response'));
+            }
             stopButton.addClass('d-none');
+            currentResponseController = null;  // Clear controller
         }
     });
 
@@ -531,10 +545,11 @@ $(document).ready(function() {
         }
     });
 
-    // Keep your existing stop button handler
+    // Update the stop button handler
     stopButton.on('click', function() {
-        if (eventSource) {
-            eventSource.close();
+        if (currentResponseController) {
+            currentResponseController.abort();
+            currentResponseController = null;
             stopButton.addClass('d-none');
         }
     });

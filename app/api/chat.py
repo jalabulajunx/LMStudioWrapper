@@ -175,17 +175,17 @@ async def create_chat(
         if not conversation:
             conversation = Conversation(
                 id=conversation_id,
-                user_id=current_user.id  # Associate with current user
+                user_id=current_user.id
             )
             db.add(conversation)
             db.commit()
             logger.debug(f"Created new conversation with ID: {conversation_id}")
 
-        # Create chat message and store its ID
+        # Create chat message
         chat_message = ChatMessage(
             content=message,
             conversation_id=conversation_id,
-            response=""  # Initialize empty response
+            response=""
         )
         db.add(chat_message)
         db.commit()
@@ -194,22 +194,27 @@ async def create_chat(
         
         # Update conversation
         conversation.updated_at = datetime.utcnow()
-        if len(conversation.messages) == 1:  # First message becomes the title
+        if len(conversation.messages) == 1:
             conversation.title = (message[:47] + "...") if len(message) > 50 else message
         db.commit()
-        
+
         async def generate_response():
             llm_service = LLMService()
             full_response = ""
             
             try:
                 async for token in llm_service.generate_stream(message):
+                    if await request.is_disconnected():
+                        # Client disconnected, stop generation
+                        logger.info(f"Client disconnected, stopping generation for message {message_id}")
+                        break
+
                     full_response += token
                     yield f"data: {json.dumps({'token': token, 'conversationId': conversation_id})}\n\n"
                 
-                logger.debug(f"Generated full response for message {message_id}: {full_response[:100]}...")
+                logger.debug(f"Generated full response for message {message_id}")
                 
-                # Update the message with the complete response using a new session
+                # Update the message with the complete response
                 db_for_update = SessionLocal()
                 try:
                     msg = db_for_update.query(ChatMessage).get(message_id)
@@ -222,7 +227,7 @@ async def create_chat(
                 finally:
                     db_for_update.close()
                 
-                yield f"data: [DONE]\n\n"
+                yield "data: [DONE]\n\n"
                 
             except Exception as e:
                 error_msg = str(e)
