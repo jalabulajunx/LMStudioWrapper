@@ -9,9 +9,10 @@ from .config import settings
 from .api import chat_router
 from .api.auth import router as auth_router
 from .database import engine, Base
-from .auth.utils import get_current_user
+from .auth.utils import get_current_user, get_current_admin_user
 from .models.user import User
 import logging
+from .api.admin import router as admin_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,6 +37,12 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # Include routers
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(chat_router, prefix="/api", dependencies=[Depends(get_current_user)])
+app.include_router(
+    admin_router,
+    prefix="/api/admin",
+    tags=["admin"],
+    dependencies=[Depends(get_current_admin_user)]
+)
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -55,6 +62,17 @@ async def root(request: Request):
     """Show chat page or redirect to login if not authenticated"""
     return templates.TemplateResponse(
         "chat.html",
+        {
+            "request": request,
+            "app_name": settings.APP_NAME
+        }
+    )
+
+@app.get("/admin", response_class=HTMLResponse)
+async def root(request: Request):
+    """Show chat page or redirect to login if not authenticated"""
+    return templates.TemplateResponse(
+        "admin.html",
         {
             "request": request,
             "app_name": settings.APP_NAME
