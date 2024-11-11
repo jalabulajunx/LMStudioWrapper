@@ -1,9 +1,15 @@
 # Family Chat Application
 
 A secure, private, and family-friendly chat application that works with local LLMs through LM Studio. Built with privacy and learning in mind.
+
+## Motive
+I always wanted to code and contribute, but I lacked the knowlegde and a partner-in-crime to collaborate. Luckily, with the advent of AI, I was able to hire a dev within claude.ai for a month to help build this application. More importantly, I was looking for ways to locally deploy language models for my son to play around. When I came across LM Studio - I knew that I could now whip up a subscription to claude and write an application. After 5 iterations and a week's time (not entirely), here is the application for all!
+
 ## Demo
 [Conversation](https://github.com/user-attachments/assets/81301f7a-cabd-4336-81c3-853766fd8de0)
+
 [Others](https://github.com/user-attachments/assets/79c45d19-fb45-455e-b987-2196b38ff57b)
+
 ## The prompt for Claude.ai
 <details>
 <summary>Original Requirements and Vision</summary>
