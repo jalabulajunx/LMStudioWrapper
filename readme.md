@@ -486,6 +486,9 @@ GPL v3
 
 ## Roadmap
 
+- [ ] Continue conversation threads
+- [ ] File Upload
+- [ ] Music Query
 - [ ] Enhanced parental controls
 - [ ] Model response filtering
 - [ ] Multi-language support
