@@ -3,7 +3,7 @@
 A secure, private, and family-friendly chat application that works with local LLMs through LM Studio. Built with privacy and learning in mind.
 
 ## Motive
-I always wanted to code and contribute, but I lacked the knowlegde and a partner-in-crime to collaborate. Luckily, with the advent of AI, I was able to hire a dev within claude.ai for a month to help build this application. More importantly, I was looking for ways to locally deploy language models for my son to play around. When I came across LM Studio - I knew that I could now whip up a subscription to claude and write an application. After 5 iterations and a week's time (not entirely), here is the application for all!
+I always wanted to code and contribute, but I lacked the knowledge and a partner-in-crime to collaborate. Luckily, with the advent of AI, I was able to hire a dev within claude.ai for a month to help build this application. More importantly, I was looking for ways to locally deploy language models for my son to play around. When I came across LM Studio - I knew that I could now whip up a subscription to Claude and write an application. After 5 iterations and a week's time (not entirely), here is the application for all!
 
 ## Demo
 [Conversation](https://github.com/user-attachments/assets/81301f7a-cabd-4336-81c3-853766fd8de0)
@@ -15,59 +15,84 @@ I always wanted to code and contribute, but I lacked the knowlegde and a partner
 <summary>Original Requirements and Vision</summary>
 
 ```text
-I have an idea of developing a web chat application sitting on top of LM Studio SDK. The application would be for my family to use the local LLMs instead of the publicly available ones. The LM Studio Server is housed within ArchLinux.
+I have an idea of developing a web chat application sitting on top of LM Stuido SDK. You should familiarize with that SDK and the application. This new application would be for my family to use the local LLMs instead of the publicly available ones. The LM Studio Server is housed within ArchLinux. This web application would be deployed on the same server. 
 
-Key Requirements:
+The web application should be with the follow client/server architecture. Feel free to choose your tech stack - that you are most familiar and good at - you can also give me options if you think there are multiple techstacks that provide different capabilities. You should modularize the application you are building for easy maintenance and troubleshooting. We'll keep it very simple - backend will be Python. Frontend would be HTML with templates. Javascript/Jquery and css.
 
-1. Users and Authentication
-   - User authentication and logout functionality
-   - Session management
-   - Private conversations
-   - Conversation history
-   - Title modification capabilities
-   - Admin user creation (no self-registration)
-   - Admin can grant admin privileges
+Architectural considerations:
+    1. Modular - each piece of feature should be its own file
+    2. Comments - every function, class and file should be well-documented
+    3. Maintenance - the code generated should be maintainable
+    4. Follow good architectural and coding practices
+    5. Should be performant
+    6. You'll write unit tests and validate if your code works
+    7. Good privacy and security principles
+    8. Can be multiple micro-services serving the front-end
 
-2. Chat Functionality
-   - Support for long and short messages
-   - Response streaming
-   - Stop generation capability
-   - Task-based system:
-     * General chat
-     * Music database queries
-   - Markdown response rendering
-   - Export and copy functionality
-   - Conversation search
+Deployment considerations:
+    1. ArhcLinux OS
+    2. Home network
+    3. Will run as a service - systemd
+    4. You'll inform me what additional packages need to be installed to run this chat program
+    5. You'll tell me how to test it without running as a service
 
-3. Design Considerations
-   - Two-panel layout:
-     * Left: Chat history
-     * Right: Conversations
-   - Intuitive UI with clear placement of:
-     * Rename/Delete functions
-     * New conversation button
-     * Chat controls
-     * Task selection
-     * Logout
-   - Responsive design
-   - Thoughtful color scheme
-   - User-friendly interface for all ages
+The requirements:
+    1. Users are to be authenticated and thus can logout of their sessions
+    2. Users will have their own sessions
+    3. Users will not see other users or other users' chats
+    4. Users can see their past chat history from previous sessions
+    5. Users can modify/rename or delete their past chat titles
+    6. Modifying chat titles should not reorder past chat conversations
+    7. Users can ask any questions - small or larger in text size
+    8. Users can stop from the response being generated
+    9. Users would see streaming response from server
+    10. An admin user would be allowed to create other users. There should be no self-registration.
+    11. The admin can make others admin as well.
+    12. Users will option to use a "general task" and another task that would allow them to ask questions about a specific database
+        a. That specific database is Music database fed by either a spreadsheet or sqlLite
+        b. Their normal questions should be converted to Select statements by a query out to LM Studio
+        c. The response statement should be validated if it is a properly formed SQL query
+        d. That SQL query should be executed and the results are to be sent to LM Studio for it to be converted to a response that end user can understand instead of a bunch of columns and rows. For instance, if the user submits a query "Find me all the albums whose composer is A. R. Rahman", then the LM Studio should then produce a SQL statement as "Select album from <DATABASE TABLE> Where albumartist like %rahman%" - it should be case insensitive retrieval. The result is to be fed again to LM Studio to be formulated as a response like "A. R. Rahman was the composer of several albums such as <Albums from SQL Query>" or "What songs were sung by this %artist%?"
+    13. Admins can also assign what tasks users see. For instance, all users can see the "general" task and only allowed users can see "music query" task. Think about future - there can be more tasks.
+    14. Users should be welcomed on login
+    15. Users should be able to copy/export the conversation thread with formatting
+    16. Users should be able to search through their conversations via the left pane
 
-4. Architectural Principles
-   - Modular design
-   - Well-documented code
-   - Maintainable structure
-   - Good architectural practices
-   - Performance optimized
-   - Security focused
-   - Microservices capability
+Design considerations:
+    1. UI should be two-paneled layout
+        a. Left pane: chat history; 
+        b. right pane: chat conversations - should be able to render markdown responses from the backend
+    2. Intuitive UI placements for:
+        a. Rename/Delete for each conversation thread
+        b. Create new conversation
+        c. Send chat
+        d. Stop chat
+        e. Tasks: General and Music Queries
+        f. Logout
+        g. Responsive on different screens and resolutions
+        h. Good colour variations on the entire application
+        i. Copy/export
+        j. Search and filter through prior conversations
+    3. Will be used by all ages
 
-5. Deployment Requirements
-   - ArchLinux compatible
-   - Home network deployment
-   - SystemD service integration
-   - Clear package dependencies
-   - Development testing support
+Documentation:
+    1. You will produce a github style readme.md that includes
+        a. A good readout about the application
+        b. System requirements
+        c. Installation requirements
+        d. Dependencies
+        e. Architecture
+        f. Database setup
+
+We should navigate this one step at a time.
+1. Build a basic app that first allows conversations to work and be saved to the database
+2. Then build the ability to login/authenticate - saved to a database
+3. Then, including additional tasks on the UI - the music query
+4. Then comes user management - saved to the database
+5. Then, the ability to save and retrieve conversations from database
+6. Ability to search through prior conversations
+7. Ability to rename/modify/delete conversations
+8. Ability to copy/export conversations
 ```
 </details>
 
