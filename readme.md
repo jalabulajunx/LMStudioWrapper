@@ -135,7 +135,7 @@ sudo pacman -S python python-pip sqlite   # Arch Linux
 sudo apt install python3 python3-pip sqlite3   # Ubuntu
 
 # Clone the repository
-git clone https://github.com/yourusername/family-chat.git
+git clone https://github.com/jalabulajunx/LMStudioWrapper.git
 cd family-chat
 
 # Create virtual environment
@@ -158,7 +158,7 @@ uvicorn app.main:app --reload
 # Install Python from python.org
 
 # Clone the repository
-git clone https://github.com/yourusername/family-chat.git
+git clone https://github.com/jalabulajunx/LMStudioWrapper.git
 cd family-chat
 
 # Create virtual environment
@@ -185,7 +185,7 @@ uvicorn app.main:app --reload
 brew install python sqlite3
 
 # Clone the repository
-git clone https://github.com/yourusername/family-chat.git
+git clone https://github.com/jalabulajunx/LMStudioWrapper.git
 cd family-chat
 
 # Create virtual environment
