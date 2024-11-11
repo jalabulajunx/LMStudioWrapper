@@ -13,6 +13,7 @@ from .auth.utils import get_current_user, get_current_admin_user
 from .models.user import User
 import logging
 from .api.admin import router as admin_router
+from .api.settings import router as settings_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,6 +44,12 @@ app.include_router(
     tags=["admin"],
     dependencies=[Depends(get_current_admin_user)]
 )
+app.include_router(
+    settings_router,
+    prefix="/api/settings",
+    tags=["settings"],
+    dependencies=[Depends(get_current_user)]
+)
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -69,8 +76,8 @@ async def root(request: Request):
     )
 
 @app.get("/admin", response_class=HTMLResponse)
-async def root(request: Request):
-    """Show chat page or redirect to login if not authenticated"""
+async def admin_page(request: Request):
+    """Show admin page"""
     return templates.TemplateResponse(
         "admin.html",
         {
@@ -79,6 +86,18 @@ async def root(request: Request):
         }
     )
 
+@app.get("/settings", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    """Show admin page"""
+    return templates.TemplateResponse(
+        "settings.html",
+        {
+            "request": request,
+            "app_name": settings.APP_NAME
+        }
+    )
+
+# Add error handler for authentication errors
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Handle HTTP exceptions"""

@@ -34,6 +34,7 @@ chat_app/
 │       └── chat.html
 │       └── admin.html
 │       └── login.html
+│       └── settings.html
 └── tests/
     ├── __init__.py
     ├── test_chat.py

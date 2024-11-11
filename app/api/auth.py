@@ -15,42 +15,46 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.post("/token", response_model=Token)
-async def login(
-    login_data: LoginRequest,
+async def login_for_access_token(
     request: Request,
+    login_data: LoginRequest,
     db: Session = Depends(get_db)
 ):
-    """Secure login endpoint"""
+    """Login endpoint that creates and returns JWT token"""
     try:
-        # Find user and verify password
+        # Find user
         user = db.query(User).filter(User.username == login_data.username).first()
         if not user or not verify_password(login_data.password, user.hashed_password):
+            logger.warning(f"Failed login attempt for username: {login_data.username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
         if not user.is_active:
+            logger.warning(f"Login attempt by inactive user: {login_data.username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Account is inactive"
+                detail="User is inactive"
             )
-        
-        # Update last login
+
+        # Update last login time
         user.last_login = datetime.utcnow()
         db.commit()
-        
-        # Generate token
+
+        # Create access token
         access_token = create_access_token(
             data={"sub": user.username},
             expires_delta=timedelta(minutes=30)
         )
-        
+
+        logger.info(f"Successful login for user: {login_data.username}")
         return {
             "access_token": access_token,
-            "token_type": "bearer",
+            "token_type": "bearer"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -58,34 +62,19 @@ async def login(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during login"
+            detail="Internal server error during login"
         )
 
-@router.get("/me")
+@router.get("/me", response_model=dict)
 async def read_users_me(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user)
 ):
     """Get current user info"""
-    try:
-        # Refresh user data from database
-        user = db.query(User).filter(User.username == current_user.username).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-            
-        return {
-            "username": user.username,
-            "email": user.email,
-            "full_name": user.full_name,
-            "is_admin": user.is_superuser or any(role.name == "admin" for role in user.roles),
-            "tasks": [task.name for task in user.tasks],
-            "last_login": user.last_login.isoformat() if user.last_login else None
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching user info: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error fetching user information"
-        )
+    return {
+        "username": current_user.username,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "is_admin": any(role.name == "admin" for role in current_user.roles) or current_user.is_superuser,
+        "tasks": [task.name for task in current_user.tasks],
+        "last_login": current_user.last_login.isoformat() if current_user.last_login else None
+    }

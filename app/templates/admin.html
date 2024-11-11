@@ -1,18 +1,41 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!-- Add navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
     <div class="container-fluid">
         <a class="navbar-brand" href="/">Family Chat</a>
+        
         <div class="d-flex align-items-center">
-            <a href="/" class="btn btn-outline-secondary me-2">
-                <i class="bi bi-chat"></i> Chat
-            </a>
-            <span class="me-3">Welcome, <span id="username"></span></span>
-            <button class="btn btn-outline-danger" id="logout-button">
-                <i class="bi bi-box-arrow-right"></i> Logout
-            </button>
+            <!-- User dropdown menu -->
+            <div class="dropdown">
+                <button class="btn btn-link text-decoration-none user-menu-button" type="button" data-bs-toggle="dropdown">
+                    <span class="me-2">Welcome, <span id="username">User</span></span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <a class="dropdown-item" href="/">
+                            <i class="bi bi-chat"></i> Chat
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" id="toggle-theme">
+                            <i class="bi bi-moon"></i> Dark Mode
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="/settings">
+                            <i class="bi bi-gear"></i> Settings
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item text-danger" href="#" id="logout-button">
+                            <i class="bi bi-box-arrow-right"></i> Logout
+                        </a>
+                    </li>
+                </ul>
+            </div>
         </div>
     </div>
 </nav>
@@ -22,9 +45,20 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h3>User Management</h3>
-                <button class="btn btn-primary" id="create-user-btn">
-                    <i class="bi bi-person-plus"></i> Create User
-                </button>
+                <div class="d-flex gap-2">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" 
+                               class="form-control" 
+                               id="search-users" 
+                               placeholder="Search users...">
+                    </div>
+                    <button class="btn btn-primary" id="create-user-btn">
+                        <i class="bi bi-person-plus"></i> Create User
+                    </button>
+                </div>
             </div>
 
             <!-- User List -->
@@ -65,21 +99,20 @@
             </div>
             <div class="modal-body">
                 <form id="user-form">
-                    <input type="hidden" id="user-id">
                     <div class="mb-3">
-                        <label for="username" class="form-label">Username</label>
+                        <label for="username-input" class="form-label">Username</label>
                         <input type="text" class="form-control" id="username-input" required>
                     </div>
                     <div class="mb-3">
-                        <label for="fullname" class="form-label">Full Name</label>
+                        <label for="fullname-input" class="form-label">Full Name</label>
                         <input type="text" class="form-control" id="fullname-input" required>
                     </div>
                     <div class="mb-3">
-                        <label for="email" class="form-label">Email</label>
+                        <label for="email-input" class="form-label">Email</label>
                         <input type="email" class="form-control" id="email-input" required>
                     </div>
                     <div class="mb-3">
-                        <label for="password" class="form-label">Password</label>
+                        <label for="password-input" class="form-label">Password</label>
                         <div class="input-group">
                             <input type="password" class="form-control" id="password-input">
                             <button class="btn btn-outline-secondary" type="button" id="toggle-password">
@@ -118,10 +151,10 @@
 
 <!-- Toast for notifications -->
 <div class="toast-container position-fixed bottom-0 end-0 p-3">
-    <div id="notification-toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div id="notification-toast" class="toast" role="alert">
         <div class="toast-header">
             <strong class="me-auto">Notification</strong>
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
         </div>
         <div class="toast-body"></div>
     </div>

@@ -559,108 +559,124 @@ $(document).ready(function() {
     });
 
     //Copy conversation to clipboard handler
-    $('#copy-conversation').on('click', async function() {
+    async function copyConversation() {
         if (!currentConversationId) {
             showNotification('No conversation to copy', 'error');
             return;
         }
         
         try {
-            const response = await fetch(`/api/conversations/${currentConversationId}`);
+            const response = await fetch(`/api/conversations/${currentConversationId}`, {
+                headers: {
+                    'Authorization': `Bearer ${sessionStorage.getItem('token')}`
+                }
+            });
+            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
             const data = await response.json();
             
-            // Create Copy Content in same format as export
-            let copyContent = "# Chat Conversation\n\n";
+            // Create formatted copy content
+            let copyContent = `# Chat Conversation\n\n`;
             copyContent += `Date: ${new Date().toLocaleString()}\n`;
             
-            if (data.conversation && data.conversation.title) {
+            if (data.conversation?.title) {
                 copyContent += `Title: ${data.conversation.title}\n`;
             }
             copyContent += "\n---\n\n";
             
             if (data.messages && Array.isArray(data.messages)) {
                 data.messages.forEach(msg => {
-                    const timestamp = new Date(msg.timestamp).toLocaleString();
-                    if (msg.content) {
-                        copyContent += `### User (${timestamp}):\n${msg.content}\n\n`;
+                    if (msg.timestamp) {
+                        const timestamp = new Date(msg.timestamp).toLocaleString();
+                        if (msg.content) {
+                            copyContent += `### User (${timestamp}):\n${msg.content}\n\n`;
+                        }
+                        if (msg.response) {
+                            copyContent += `### Assistant (${timestamp}):\n${msg.response}\n\n`;
+                        }
+                        copyContent += "---\n\n";
                     }
-                    if (msg.response) {
-                        copyContent += `### Assistant:\n${msg.response}\n\n`;
-                    }
-                    copyContent += "---\n\n";
                 });
                 
-                // Copy to clipboard
-                navigator.clipboard.writeText(copyContent)
-                    .then(() => {
-                        const $btn = $(this);
-                        const originalHtml = $btn.html();
-                        
-                        // Visual feedback
-                        $btn.html('<i class="bi bi-clipboard-check"></i> Copied!')
-                            .addClass('btn-success')
-                            .removeClass('btn-outline-secondary');
-                        
-                        showNotification('Conversation copied to clipboard', 'success');
-                        
-                        // Reset button after delay
-                        setTimeout(() => {
-                            $btn.html(originalHtml)
-                                .removeClass('btn-success')
-                                .addClass('btn-outline-secondary');
-                        }, 2000);
-                    })
-                    .catch(error => {
-                        console.error('Error copying text:', error);
-                        showNotification('Failed to copy conversation', 'error');
-                    });
+                try {
+                    await navigator.clipboard.writeText(copyContent);
+                    const $btn = $('#copy-conversation');
+                    const originalHtml = $btn.html();
+                    
+                    // Visual feedback
+                    $btn.html('<i class="bi bi-clipboard-check"></i> Copied!')
+                        .addClass('btn-success')
+                        .removeClass('btn-outline-secondary');
+                    
+                    showNotification('Conversation copied to clipboard', 'success');
+                    
+                    // Reset button after delay
+                    setTimeout(() => {
+                        $btn.html(originalHtml)
+                            .removeClass('btn-success')
+                            .addClass('btn-outline-secondary');
+                    }, 2000);
+                } catch (error) {
+                    console.error('Copy to clipboard error:', error);
+                    showNotification('Failed to copy to clipboard. Please try again.', 'error');
+                }
             } else {
                 throw new Error('No messages found in conversation');
             }
         } catch (error) {
-            console.error('Error copying chat:', error);
-            showNotification('Failed to copy chat', 'error');
+            console.error('Error copying conversation:', error);
+            showNotification(
+                error.message === 'No messages found in conversation' 
+                    ? 'No messages to copy' 
+                    : 'Failed to copy conversation',
+                'error'
+            );
         }
-    });
+    }
+
+    $('#copy-conversation').on('click', copyConversation);
 
     //Export chat event handler
-    $('#export-chat').on('click', async function() {
+    async function exportConversation() {
         if (!currentConversationId) {
             showNotification('No conversation to export', 'error');
             return;
         }
         
         try {
-            const response = await fetch(`/api/conversations/${currentConversationId}`);
+            const response = await fetch(`/api/conversations/${currentConversationId}`, {
+                headers: {
+                    'Authorization': `Bearer ${sessionStorage.getItem('token')}`
+                }
+            });
+            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
             const data = await response.json();
             
-            // Create Export Content
-            let exportContent = "# Chat Export\n\n";
+            // Create formatted export content
+            let exportContent = `# Chat Export\n\n`;
             exportContent += `Date: ${new Date().toLocaleString()}\n`;
-            
-            if (data.conversation && data.conversation.title) {
-                exportContent += `Title: ${data.conversation.title}\n`;
-            }
-            exportContent += "\n---\n\n";
+            exportContent += `Title: ${data.conversation?.title || 'Untitled'}\n`;
+            exportContent += `\n---\n\n`;
             
             if (data.messages && Array.isArray(data.messages)) {
                 data.messages.forEach(msg => {
-                    const timestamp = new Date(msg.timestamp).toLocaleString();
-                    if (msg.content) {
-                        exportContent += `### User (${timestamp}):\n${msg.content}\n\n`;
+                    if (msg.timestamp) {
+                        const timestamp = new Date(msg.timestamp).toLocaleString();
+                        if (msg.content) {
+                            exportContent += `### User (${timestamp}):\n${msg.content}\n\n`;
+                        }
+                        if (msg.response) {
+                            exportContent += `### Assistant (${timestamp}):\n${msg.response}\n\n`;
+                        }
+                        exportContent += "---\n\n";
                     }
-                    if (msg.response) {
-                        exportContent += `### Assistant:\n${msg.response}\n\n`;
-                    }
-                    exportContent += "---\n\n";
                 });
                 
                 // Create and trigger download
@@ -669,11 +685,16 @@ $(document).ready(function() {
                 const a = document.createElement('a');
                 a.style.display = 'none';
                 a.href = url;
+                
+                // Create filename from conversation title or default
                 const fileName = data.conversation?.title 
                     ? `${data.conversation.title}-${new Date().toISOString().slice(0,10)}.md`
                     : `chat-export-${new Date().toISOString().slice(0,10)}.md`;
-                a.download = fileName;
                 
+                // Sanitize filename
+                a.download = fileName.replace(/[^a-z0-9.-]/gi, '_');
+                
+                // Trigger download
                 document.body.appendChild(a);
                 a.click();
                 
@@ -684,14 +705,36 @@ $(document).ready(function() {
                 }, 100);
                 
                 showNotification('Chat exported successfully', 'success');
+                
+                // Visual feedback on button
+                const $btn = $('#export-chat');
+                const originalHtml = $btn.html();
+                $btn.html('<i class="bi bi-check2"></i> Exported!')
+                    .addClass('btn-success')
+                    .removeClass('btn-outline-secondary');
+                
+                // Reset button after delay
+                setTimeout(() => {
+                    $btn.html(originalHtml)
+                        .removeClass('btn-success')
+                        .addClass('btn-outline-secondary');
+                }, 2000);
+                
             } else {
                 throw new Error('No messages found in conversation');
             }
         } catch (error) {
             console.error('Error exporting chat:', error);
-            showNotification('Failed to export chat', 'error');
+            showNotification(
+                error.message === 'No messages found in conversation'
+                    ? 'No messages to export'
+                    : 'Failed to export chat',
+                'error'
+            );
         }
-    });
+    }
+
+    $('#export-chat').on('click', exportConversation);
 
     // Task selector handling
     $('#task-selector').on('change', function() {
@@ -715,5 +758,66 @@ $(document).ready(function() {
         
         const bsToast = new bootstrap.Toast(toast);
         bsToast.show();
+    }
+
+    // app/static/js/chat.js - Add helper functions
+    function formatConversationContent(data, type = 'copy') {
+        const title = type === 'export' ? '# Chat Export\n\n' : '# Chat Conversation\n\n';
+        let content = title;
+        content += `Date: ${new Date().toLocaleString()}\n`;
+        
+        if (data.conversation?.title) {
+            content += `Title: ${data.conversation.title}\n`;
+        }
+        content += "\n---\n\n";
+        
+        if (data.messages && Array.isArray(data.messages)) {
+            data.messages.forEach(msg => {
+                if (msg.timestamp) {
+                    const timestamp = new Date(msg.timestamp).toLocaleString();
+                    if (msg.content) {
+                        content += `### User (${timestamp}):\n${msg.content}\n\n`;
+                    }
+                    if (msg.response) {
+                        content += `### Assistant (${timestamp}):\n${msg.response}\n\n`;
+                    }
+                    content += "---\n\n";
+                }
+            });
+        }
+        
+        return content;
+    }
+
+    function updateButtonState(button, success = true) {
+        const $btn = $(button);
+        const originalHtml = $btn.html();
+        const successHtml = success 
+            ? `<i class="bi bi-${button.id.includes('copy') ? 'clipboard-check' : 'check2'}"></i> ${button.id.includes('copy') ? 'Copied!' : 'Exported!'}`
+            : originalHtml;
+        
+        $btn.html(successHtml)
+            .toggleClass('btn-success', success)
+            .toggleClass('btn-outline-secondary', !success);
+        
+        setTimeout(() => {
+            $btn.html(originalHtml)
+                .removeClass('btn-success')
+                .addClass('btn-outline-secondary');
+        }, 2000);
+    }
+
+    async function fetchConversation(conversationId) {
+        const response = await fetch(`/api/conversations/${conversationId}`, {
+            headers: {
+                'Authorization': `Bearer ${sessionStorage.getItem('token')}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        return await response.json();
     }
 });

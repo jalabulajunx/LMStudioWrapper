@@ -3,16 +3,16 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
 
-class TokenBase(BaseModel):
+class Token(BaseModel):
     access_token: str
     token_type: str
-
-class Token(TokenBase):
-    pass
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
 
 class UserBase(BaseModel):
     username: str
