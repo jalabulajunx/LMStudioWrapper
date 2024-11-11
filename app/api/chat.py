@@ -1,15 +1,16 @@
 # app/api/chat.py
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from ..database import SessionLocal
-from ..services.llm_service import LLMService, LMStudioConnectionError
+from ..database import get_db, SessionLocal
 from ..models.chat import ChatMessage, Conversation
+from ..services.llm_service import LLMService
+from ..auth.utils import get_current_user
+from ..models.user import User
 import uuid
 import json
 from datetime import datetime
-from typing import List, Optional,  Any, Dict
 import logging
 
 
@@ -17,27 +18,26 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 @router.get("/conversations")
-async def list_conversations(db: Session = Depends(get_db)):
+async def list_conversations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """List all conversations with their latest messages"""
     try:
-        conversations = db.query(Conversation).order_by(desc(Conversation.updated_at)).all()
+        conversations = db.query(Conversation)\
+            .filter(Conversation.user_id == current_user.id)\
+            .order_by(desc(Conversation.updated_at))\
+            .all()
+        
         return [
             {
                 "id": conv.id,
                 "title": conv.title,
-                "created_at": conv.created_at,
-                "updated_at": conv.updated_at,
-                "last_message": (conv.messages[-1].content if conv.messages else None),
-                "last_response": (conv.messages[-1].response if conv.messages and conv.messages[-1].response else None)
+                "created_at": conv.created_at.isoformat() if conv.created_at else None,
+                "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
+                "last_message": conv.messages[-1].content if conv.messages else None,
+                "last_response": conv.messages[-1].response if conv.messages and conv.messages[-1].response else None
             }
             for conv in conversations
         ]
@@ -46,46 +46,103 @@ async def list_conversations(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/conversations")
-async def create_conversation(db: Session = Depends(get_db)):
-    conversation = Conversation(
-        id=str(uuid.uuid4()),
-        title="New Conversation"
-    )
-    db.add(conversation)
-    db.commit()
-    db.refresh(conversation)
-    return conversation
+async def create_conversation(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new conversation"""
+    try:
+        conversation = Conversation(
+            id=str(uuid.uuid4()),
+            title="New Conversation",
+            user_id=current_user.id
+        )
+        db.add(conversation)
+        db.commit()
+        db.refresh(conversation)
+        
+        return {
+            "id": conversation.id,
+            "title": conversation.title,
+            "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
+            "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None
+        }
+    except Exception as e:
+        logger.error(f"Error creating conversation: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/conversations/{conversation_id}")
 async def update_conversation(
     conversation_id: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    data = await request.json()
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    
-    if title := data.get("title"):
-        conversation.title = title
-        db.commit()
-        db.refresh(conversation)
-    
-    return conversation
+    """Update conversation title"""
+    try:
+        data = await request.json()
+        conversation = db.query(Conversation)\
+            .filter(
+                Conversation.id == conversation_id,
+                Conversation.user_id == current_user.id
+            ).first()
+            
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        if title := data.get("title"):
+            conversation.title = title
+            db.commit()
+            db.refresh(conversation)
+        
+        return {
+            "id": conversation.id,
+            "title": conversation.title,
+            "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
+            "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating conversation: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: str, db: Session = Depends(get_db)):
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    
-    db.delete(conversation)
-    db.commit()
-    return {"status": "success"}
+async def delete_conversation(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a conversation"""
+    try:
+        conversation = db.query(Conversation)\
+            .filter(
+                Conversation.id == conversation_id,
+                Conversation.user_id == current_user.id
+            ).first()
+            
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        
+        db.delete(conversation)
+        db.commit()
+        
+        return {"status": "success", "message": "Conversation deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting conversation: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/chat")
-async def create_chat(request: Request, db: Session = Depends(get_db)):
+async def create_chat(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Create a new chat message and get streaming response"""
     try:
         request_data = await request.json()
@@ -98,9 +155,14 @@ async def create_chat(request: Request, db: Session = Depends(get_db)):
         logger.debug(f"Processing chat request - Message: {message}, Conversation ID: {conversation_id}")
         
         # Get or create conversation
-        conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        conversation = db.query(Conversation)\
+            .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)\
+            .first()
         if not conversation:
-            conversation = Conversation(id=conversation_id)
+            conversation = Conversation(
+                id=conversation_id,
+                user_id=current_user.id  # Associate with current user
+            )
             db.add(conversation)
             db.commit()
             logger.debug(f"Created new conversation with ID: {conversation_id}")
@@ -174,40 +236,46 @@ async def create_chat(request: Request, db: Session = Depends(get_db)):
         logger.error(f"Error in chat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/conversations/{conversation_id}")
-async def get_conversation(conversation_id: str, db: Session = Depends(get_db)):
+async def get_conversation(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get all messages in a conversation"""
     try:
-        logger.debug(f"Fetching conversation: {conversation_id}")
-        conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        conversation = db.query(Conversation)\
+            .filter(
+                Conversation.id == conversation_id,
+                Conversation.user_id == current_user.id
+            ).first()
+            
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
         
-        messages = db.query(ChatMessage).filter(
-            ChatMessage.conversation_id == conversation_id
-        ).order_by(ChatMessage.timestamp).all()
-        
-        logger.debug(f"Found {len(messages)} messages in conversation {conversation_id}")
-        for msg in messages:
-            logger.debug(f"Message {msg.id}: content_length={len(msg.content)}, response_length={len(msg.response) if msg.response else 0}")
+        messages = db.query(ChatMessage)\
+            .filter(ChatMessage.conversation_id == conversation_id)\
+            .order_by(ChatMessage.timestamp).all()
         
         return {
             "conversation": {
                 "id": conversation.id,
                 "title": conversation.title,
-                "created_at": conversation.created_at,
-                "updated_at": conversation.updated_at
+                "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
+                "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None,
             },
             "messages": [
                 {
                     "id": msg.id,
                     "content": msg.content,
                     "response": msg.response,
-                    "timestamp": msg.timestamp.isoformat()
-                } for msg in messages
+                    "timestamp": msg.timestamp.isoformat() if msg.timestamp else None
+                }
+                for msg in messages
             ]
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error fetching conversation: {str(e)}")
+        logger.error(f"Error getting conversation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center mt-5">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h4 class="card-title text-center mb-4">Family Chat Login</h4>
+                    <form id="login-form" autocomplete="off">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Username</label>
+                            <input 
+                                type="text" 
+                                class="form-control" 
+                                id="username" 
+                                name="username" 
+                                required 
+                                autocomplete="username">
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <div class="input-group">
+                                <input 
+                                    type="password" 
+                                    class="form-control" 
+                                    id="password" 
+                                    name="password" 
+                                    required 
+                                    autocomplete="current-password">
+                                <button 
+                                    class="btn btn-outline-secondary" 
+                                    type="button" 
+                                    id="toggle-password">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button 
+                                type="submit" 
+                                class="btn btn-primary"
+                                id="login-button">
+                                Login
+                            </button>
+                        </div>
+                        <div class="alert alert-danger mt-3 d-none" id="login-error" role="alert"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Clear any existing token
+        sessionStorage.removeItem('token');
+    
+        const form = $('#login-form');
+        const errorDiv = $('#login-error');
+        const loginButton = $('#login-button');
+        const togglePasswordBtn = $('#toggle-password');
+        const passwordInput = $('#password');
+    
+        // Password visibility toggle
+        togglePasswordBtn?.on('click', function() {
+            const type = passwordInput.attr('type') === 'password' ? 'text' : 'password';
+            passwordInput.attr('type', type);
+            $(this).find('i').toggleClass('bi-eye bi-eye-slash');
+        });
+    
+        form.on('submit', async function(e) {
+            e.preventDefault();
+            
+            // Disable form while processing
+            const formInputs = form.find('input, button');
+            formInputs.prop('disabled', true);
+            loginButton.html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Logging in...');
+            errorDiv.addClass('d-none');
+    
+            try {
+                const response = await fetch('/api/auth/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: $('#username').val().trim(),
+                        password: $('#password').val()
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Store token
+                    sessionStorage.setItem('token', data.access_token);
+                    window.location.href = '/';
+                } else {
+                    throw new Error(data.detail || 'Login failed');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                errorDiv.text(error.message || 'An error occurred during login. Please try again.')
+                    .removeClass('d-none');
+                
+                // Clear password field on error
+                passwordInput.val('');
+                passwordInput.focus();
+            } finally {
+                // Re-enable form
+                formInputs.prop('disabled', false);
+                loginButton.html('Login');
+            }
+        });
+    });
+    </script>
+{% endblock %}

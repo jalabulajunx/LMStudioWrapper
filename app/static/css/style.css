@@ -109,3 +109,41 @@ html, body {
 .cursor-pointer {
     cursor: pointer;
 }
+
+
+.message {
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    opacity: 0.6;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 10;
+}
+
+.copy-btn:hover {
+    opacity: 1;
+}
+
+.assistant-message {
+    padding-right: 40px; /* Make room for the copy button */
+}
+
+.message-content {
+    overflow-x: auto;
+}
+
+/* Add animation for copy feedback */
+@keyframes copyFeedback {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+.copy-success {
+    animation: copyFeedback 0.3s ease-in-out;
+}

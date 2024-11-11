@@ -1,5 +1,6 @@
 // app/static/js/chat.js
 $(document).ready(function() {
+
     const chatForm = $('#chat-form');
     const messageInput = $('#message-input');
     const chatMessages = $('.chat-messages');
@@ -8,28 +9,189 @@ $(document).ready(function() {
     let currentConversationId = null;
     let eventSource = null;
 
+    
+    // Check authentication first
+    const token = sessionStorage.getItem('token');
+    if (!token) {
+        window.location.href = '/login';
+        return;
+    }
+
+    // Set up AJAX defaults with token
+    $.ajaxSetup({
+        beforeSend: function(xhr) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+    });
+
+    // Initialize application
+    async function initializeApp() {
+        try {
+            // Fetch user info
+            const userResponse = await fetch('/api/auth/me', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!userResponse.ok) {
+                throw new Error('Failed to fetch user info');
+            }
+            
+            const userData = await userResponse.json();
+            
+            // Update UI with user info
+            $('#username').text(userData.username);
+            
+            // Update task selector
+            if (userData.tasks && Array.isArray(userData.tasks)) {
+                const taskSelector = $('#task-selector');
+                taskSelector.empty();
+                userData.tasks.forEach(task => {
+                    const taskName = task.charAt(0).toUpperCase() + task.slice(1);
+                    taskSelector.append(`<option value="${task}">${taskName} Chat</option>`);
+                });
+            }
+            
+            // If user is admin, show admin UI elements
+            if (userData.is_admin) {
+                $('.admin-only').removeClass('d-none');
+            }
+            
+            // Load conversations
+            await loadConversations();
+            await loadLatestConversation();
+            
+        } catch (error) {
+            console.error('Initialization error:', error);
+            if (error.message.includes('Failed to fetch user info')) {
+                showNotification('Session expired. Please login again.', 'error');
+                sessionStorage.removeItem('token');
+                window.location.href = '/login';
+            } else {
+                showNotification('Error initializing application', 'error');
+            }
+        }
+    }
+
+    // Start initialization
+    initializeApp().catch(error => {
+        console.error('Fatal initialization error:', error);
+        showNotification('Failed to initialize application', 'error');
+    });
+
+    /* // Fetch user info and initialize
+    fetch('/api/auth/me', {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('Failed to fetch user info');
+        return response.json();
+    })
+    .then(data => {
+        $('#username').text(data.username);
+        
+        // Update task selector if user has specific tasks
+        if (data.tasks && Array.isArray(data.tasks)) {
+            const taskSelector = $('#task-selector');
+            taskSelector.empty();
+            data.tasks.forEach(task => {
+                taskSelector.append(`<option value="${task}">${task.charAt(0).toUpperCase() + task.slice(1)} Chat</option>`);
+            });
+        }
+
+        // Now load conversations after successful auth
+        return loadConversations();
+    })
+    .then(() => {
+        return loadLatestConversation();
+    })
+    .catch(error => {
+        console.error('Initialization error:', error);
+        showNotification('Please log in again', 'error');
+        sessionStorage.removeItem('token');
+        window.location.href = '/login';
+    });
+ */
+    // Check authentication status
+    function checkAuth() {
+        const token = sessionStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+            return false;
+        }
+        return true;
+    }
+
+    // Add more robust error handling for all fetch calls
+    function handleFetchError(error, customMessage = 'Operation failed') {
+        console.error('Fetch error:', error);
+        if (error.message.includes('Failed to fetch')) {
+            showNotification('Connection error. Please check your internet connection.', 'error');
+        } else if (error.status === 401) {
+            showNotification('Session expired. Please login again.', 'error');
+            sessionStorage.removeItem('token');
+            window.location.href = '/login';
+        } else {
+            showNotification(customMessage, 'error');
+        }
+    }
+
+    // Update your existing error handler
+    $(document).ajaxError(function(event, jqXHR, settings, thrownError) {
+        console.error('AJAX error:', thrownError);
+        if (jqXHR.status === 401) {
+            showNotification('Session expired. Please login again.', 'error');
+            sessionStorage.removeItem('token');
+            window.location.href = '/login';
+        } else {
+            showNotification('An error occurred. Please try again.', 'error');
+        }
+    });
+
+    // Check auth before proceeding
+    if (!checkAuth()) return;
 
     // Initialize by loading conversations and latest chat
     loadConversations().then(() => {
         loadLatestConversation();
     });
 
-    //load latest conversation
+    // Load latest conversation with auth header
     async function loadLatestConversation() {
         try {
-            const response = await fetch('/api/conversations');
+            const response = await fetch('/api/conversations', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load conversations');
+            }
+            
             const conversations = await response.json();
             
             if (conversations && conversations.length > 0) {
-                // Get the most recent conversation
                 const latestConv = conversations[0];
                 currentConversationId = latestConv.id;
                 
-                // Load its messages
-                const msgResponse = await fetch(`/api/conversations/${latestConv.id}`);
+                const msgResponse = await fetch(`/api/conversations/${latestConv.id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!msgResponse.ok) {
+                    throw new Error('Failed to load conversation messages');
+                }
+                
                 const data = await msgResponse.json();
                 
                 if (data.messages && Array.isArray(data.messages)) {
+                    chatMessages.empty();
                     data.messages.forEach(msg => {
                         if (msg.content) appendMessage(msg.content, 'user');
                         if (msg.response) appendMessage(msg.response, 'assistant');
@@ -38,14 +200,29 @@ $(document).ready(function() {
             }
         } catch (error) {
             console.error('Error loading latest conversation:', error);
-            showNotification('Failed to load conversation', 'error');
+            if (error.status === 401) {
+                showNotification('Session expired. Please login again.', 'error');
+                sessionStorage.removeItem('token');
+                window.location.href = '/login';
+            } else {
+                showNotification('Failed to load conversation', 'error');
+            }
         }
     }
 
-    // Conversation Management Functions
+    // Load conversations with auth header
     async function loadConversations() {
         try {
-            const response = await fetch('/api/conversations');
+            const response = await fetch('/api/conversations', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load conversations');
+            }
+            
             const conversations = await response.json();
             
             chatHistory.empty();
@@ -76,14 +253,23 @@ $(document).ready(function() {
             });
         } catch (error) {
             console.error('Error loading conversations:', error);
-            showNotification('Failed to load conversation history', 'error');
+            if (error.status === 401) {
+                showNotification('Session expired. Please login again.', 'error');
+                sessionStorage.removeItem('token');
+                window.location.href = '/login';
+            } else {
+                showNotification('Failed to load conversations', 'error');
+            }
         }
     }
 
     async function createNewConversation() {
         try {
             const response = await fetch('/api/conversations', {
-                method: 'POST'
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${sessionStorage.getItem('token')}`
+                }
             });
             const conversation = await response.json();
             currentConversationId = conversation.id;
@@ -92,7 +278,6 @@ $(document).ready(function() {
         } catch (error) {
             console.error('Error creating conversation:', error);
             showNotification('Failed to create new conversation', 'error');
-            // Fallback to your original UUID generation if API fails
             currentConversationId = crypto.randomUUID();
         }
     }
@@ -102,28 +287,16 @@ $(document).ready(function() {
         const messageDiv = $('<div>')
             .addClass('message')
             .addClass(role + '-message');
-    
-        // Create message content div
+        
         const contentDiv = $('<div>').addClass('message-content');
+        
         if (role === 'assistant') {
             contentDiv.html(marked.parse(content));
-            
-            // Add copy button for assistant messages
-            const copyBtn = $('<button>')
-                .addClass('btn btn-sm btn-outline-secondary copy-btn')
-                .html('<i class="bi bi-clipboard"></i>')
-                .attr('title', 'Copy response')
-                .on('click', function(e) {
-                    e.stopPropagation();
-                    copyToClipboard(content);
-                });
-                
-            messageDiv.append(contentDiv, copyBtn);
         } else {
             contentDiv.text(content);
-            messageDiv.append(contentDiv);
         }
-    
+        
+        messageDiv.append(contentDiv);
         chatMessages.append(messageDiv);
         chatMessages.scrollTop(chatMessages[0].scrollHeight);
         return messageDiv;
@@ -132,6 +305,7 @@ $(document).ready(function() {
     // Keep your existing chat submission handler
     chatForm.on('submit', async function(e) {
         e.preventDefault();
+        if (!checkAuth()) return;
 
         const message = messageInput.val().trim();
         if (!message) return;
@@ -156,6 +330,7 @@ $(document).ready(function() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${sessionStorage.getItem('token')}`
                 },
                 body: JSON.stringify({
                     message: message,
@@ -206,6 +381,26 @@ $(document).ready(function() {
             console.error('Request error:', error);
             responseDiv.html(marked.parse('Error: Failed to generate response'));
             stopButton.addClass('d-none');
+        }
+    });
+
+    // Add logout button and handler
+    $('.navbar-nav').append(`
+        <li class="nav-item">
+            <button class="btn btn-outline-danger ms-2" id="logout-button">
+                <i class="bi bi-box-arrow-right"></i> Logout
+            </button>
+        </li>
+    `);
+
+    // Add logout handler
+    $('#logout-button').on('click', function() {
+        if (confirm('Are you sure you want to logout?')) {
+            sessionStorage.removeItem('token');
+            showNotification('Logged out successfully', 'success');
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 500);
         }
     });
 
@@ -348,6 +543,75 @@ $(document).ready(function() {
         });
     });
 
+    //Copy conversation to clipboard handler
+    $('#copy-conversation').on('click', async function() {
+        if (!currentConversationId) {
+            showNotification('No conversation to copy', 'error');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/conversations/${currentConversationId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            // Create Copy Content in same format as export
+            let copyContent = "# Chat Conversation\n\n";
+            copyContent += `Date: ${new Date().toLocaleString()}\n`;
+            
+            if (data.conversation && data.conversation.title) {
+                copyContent += `Title: ${data.conversation.title}\n`;
+            }
+            copyContent += "\n---\n\n";
+            
+            if (data.messages && Array.isArray(data.messages)) {
+                data.messages.forEach(msg => {
+                    const timestamp = new Date(msg.timestamp).toLocaleString();
+                    if (msg.content) {
+                        copyContent += `### User (${timestamp}):\n${msg.content}\n\n`;
+                    }
+                    if (msg.response) {
+                        copyContent += `### Assistant:\n${msg.response}\n\n`;
+                    }
+                    copyContent += "---\n\n";
+                });
+                
+                // Copy to clipboard
+                navigator.clipboard.writeText(copyContent)
+                    .then(() => {
+                        const $btn = $(this);
+                        const originalHtml = $btn.html();
+                        
+                        // Visual feedback
+                        $btn.html('<i class="bi bi-clipboard-check"></i> Copied!')
+                            .addClass('btn-success')
+                            .removeClass('btn-outline-secondary');
+                        
+                        showNotification('Conversation copied to clipboard', 'success');
+                        
+                        // Reset button after delay
+                        setTimeout(() => {
+                            $btn.html(originalHtml)
+                                .removeClass('btn-success')
+                                .addClass('btn-outline-secondary');
+                        }, 2000);
+                    })
+                    .catch(error => {
+                        console.error('Error copying text:', error);
+                        showNotification('Failed to copy conversation', 'error');
+                    });
+            } else {
+                throw new Error('No messages found in conversation');
+            }
+        } catch (error) {
+            console.error('Error copying chat:', error);
+            showNotification('Failed to copy chat', 'error');
+        }
+    });
+
     //Export chat event handler
     $('#export-chat').on('click', async function() {
         if (!currentConversationId) {
@@ -436,23 +700,5 @@ $(document).ready(function() {
         
         const bsToast = new bootstrap.Toast(toast);
         bsToast.show();
-    }
-
-    // helper function for copying text to clipboard
-    function copyToClipboard(text) {
-        // Create temporary textarea
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        document.body.appendChild(textarea);
-        textarea.select();
-        
-        try {
-            document.execCommand('copy');
-            showNotification('Copied to clipboard!', 'success');
-        } catch (err) {
-            showNotification('Failed to copy text', 'error');
-        } finally {
-            document.body.removeChild(textarea);
-        }
     }
 });

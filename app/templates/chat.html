@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 
 {% block content %}
+<!-- Add navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/">Family Chat</a>
+        <div class="d-flex align-items-center">
+            <span class="me-3">Welcome, <span id="username"></span></span>
+            <button class="btn btn-outline-danger" id="logout-button">
+                <i class="bi bi-box-arrow-right"></i> Logout
+            </button>
+        </div>
+    </div>
+</nav>
 <div class="container-fluid h-100">
     <div class="row h-100">
         <!-- Left panel - Chat history -->
@@ -35,7 +47,12 @@
                         <option value="music">Music Query</option>
                     </select>
                 </div>
-                <div>
+                <div class="btn-group">
+                    <!-- Add copy button -->
+                    <button class="btn btn-outline-secondary btn-sm" id="copy-conversation" title="Copy entire conversation">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                    <!-- Existing export button -->
                     <button class="btn btn-outline-secondary btn-sm" id="export-chat">
                         <i class="bi bi-download"></i> Export
                     </button>
@@ -61,6 +78,18 @@
                     </button>
                 </form>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add tooltip template for copy feedback -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050">
+    <div id="copyTooltip" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="bi bi-clipboard-check"></i> Copied to clipboard!
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
     </div>
 </div>
