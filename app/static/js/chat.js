@@ -451,7 +451,11 @@ $(document).ready(function() {
             currentConversationId = convId;
             
             try {
-                const response = await fetch(`/api/conversations/${convId}`);
+                const response = await fetch(`/api/conversations/${convId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${sessionStorage.getItem('token')}`
+                    }
+                });
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -491,6 +495,7 @@ $(document).ready(function() {
                 const response = await fetch(`/api/conversations/${convId}`, {
                     method: 'PUT',
                     headers: {
+                        'Authorization': `Bearer ${sessionStorage.getItem('token')}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ title: newTitle })
@@ -523,20 +528,18 @@ $(document).ready(function() {
         
         try {
             const response = await fetch(`/api/conversations/${convId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${sessionStorage.getItem('token')}`
+                },
             });
 
             if (!response.ok) {
                 throw new Error('Failed to delete conversation');
             }
 
-            if (isCurrentConv) {
-                // If we deleted the current conversation, create a new one
-                await createNewConversation();
-            } else {
-                // Otherwise just refresh the list
-                await loadConversations();
-            }
+            //just refresh the list
+            await loadConversations();
             
             showNotification('Conversation deleted successfully', 'success');
         } catch (error) {

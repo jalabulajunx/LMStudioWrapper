@@ -255,46 +255,43 @@ async def create_chat(
         logger.error(f"Error in chat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/conversations/{conversation_id}")
-async def get_conversation(
+@router.put("/conversations/{conversation_id}")
+async def update_conversation(
     conversation_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """Get all messages in a conversation"""
+    """Update conversation title - verify user owns the conversation"""
     try:
+        data = await request.json()
         conversation = db.query(Conversation)\
             .filter(
                 Conversation.id == conversation_id,
-                Conversation.user_id == current_user.id
+                Conversation.user_id == current_user.id  # Ensure user owns the conversation
             ).first()
             
         if not conversation:
+            logger.warning(f"User {current_user.username} attempted to access unauthorized conversation {conversation_id}")
             raise HTTPException(status_code=404, detail="Conversation not found")
         
-        messages = db.query(ChatMessage)\
-            .filter(ChatMessage.conversation_id == conversation_id)\
-            .order_by(ChatMessage.timestamp).all()
+        if title := data.get("title"):
+            conversation.title = title
+            conversation.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(conversation)
+            
+            logger.info(f"Updated conversation {conversation_id} title for user {current_user.username}")
         
         return {
-            "conversation": {
-                "id": conversation.id,
-                "title": conversation.title,
-                "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
-                "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None,
-            },
-            "messages": [
-                {
-                    "id": msg.id,
-                    "content": msg.content,
-                    "response": msg.response,
-                    "timestamp": msg.timestamp.isoformat() if msg.timestamp else None
-                }
-                for msg in messages
-            ]
+            "id": conversation.id,
+            "title": conversation.title,
+            "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
+            "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting conversation: {str(e)}")
+        logger.error(f"Error updating conversation {conversation_id} for user {current_user.username}: {str(e)}")
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
