@@ -11,9 +11,15 @@ chat_app/
 │   ├── models/
 │   │   ├── __init__.py
 │   │   └── chat.py
+│   │   └── user.py
 │   ├── api/
 │   │   ├── __init__.py
 │   │   └── chat.py
+│   │   └── auth.py
+│   │   └── admin.py
+│   ├── schemas/
+│   │   ├── admin.py
+│   │   └── auth.py
 │   ├── services/
 │   │   ├── __init__.py
 │   │   └── llm_service.py
@@ -22,9 +28,12 @@ chat_app/
 │   │   │   └── style.css
 │   │   └── js/
 │   │       └── chat.js
+│   │       └── admin.js
 │   └── templates/
 │       ├── base.html
 │       └── chat.html
+│       └── admin.html
+│       └── login.html
 └── tests/
     ├── __init__.py
     ├── test_chat.py

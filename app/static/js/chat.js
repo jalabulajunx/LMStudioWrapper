@@ -43,6 +43,11 @@ $(document).ready(function() {
             // Update UI with user info
             $('#username').text(userData.username);
             
+            // Show admin menu if user is admin
+            if (userData.is_admin) {
+                $('#admin-menu').removeClass('d-none');
+            }
+            
             // Update task selector
             if (userData.tasks && Array.isArray(userData.tasks)) {
                 const taskSelector = $('#task-selector');
@@ -52,11 +57,9 @@ $(document).ready(function() {
                     taskSelector.append(`<option value="${task}">${taskName} Chat</option>`);
                 });
             }
-            
-            // If user is admin, show admin UI elements
-            if (userData.is_admin) {
-                $('.admin-only').removeClass('d-none');
-            }
+
+            // Initialize theme
+            initializeTheme();
             
             // Load conversations
             await loadConversations();
@@ -74,47 +77,59 @@ $(document).ready(function() {
         }
     }
 
+    // Theme handling functions
+    function initializeTheme() {
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        setTheme(savedTheme === 'dark');
+        updateThemeToggleText();
+    }
+
+    function setTheme(isDark) {
+        document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        updateThemeToggleText();
+    }
+
+    function updateThemeToggleText() {
+        const isDark = localStorage.getItem('theme') === 'dark';
+        const $toggleTheme = $('#toggle-theme');
+        $toggleTheme.html(
+            isDark ? 
+            '<i class="bi bi-sun"></i> Light Mode' : 
+            '<i class="bi bi-moon"></i> Dark Mode'
+        );
+    }
+
+    // Theme toggle handler
+    $('#toggle-theme').on('click', function(e) {
+        e.preventDefault();
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        setTheme(newTheme === 'dark');
+    });
+
+    // Mobile menu toggle handler
+    $('#history-toggle').on('click', function() {
+        $('.history-column').toggleClass('show');
+    });
+
+    // Close mobile menu when clicking outside
+    $(document).on('click', function(e) {
+        if (
+            $('.history-column').hasClass('show') && 
+            !$(e.target).closest('.history-column').length && 
+            !$(e.target).closest('#history-toggle').length
+        ) {
+            $('.history-column').removeClass('show');
+        }
+    });
+
     // Start initialization
     initializeApp().catch(error => {
         console.error('Fatal initialization error:', error);
         showNotification('Failed to initialize application', 'error');
     });
 
-    /* // Fetch user info and initialize
-    fetch('/api/auth/me', {
-        headers: {
-            'Authorization': `Bearer ${token}`
-        }
-    })
-    .then(response => {
-        if (!response.ok) throw new Error('Failed to fetch user info');
-        return response.json();
-    })
-    .then(data => {
-        $('#username').text(data.username);
-        
-        // Update task selector if user has specific tasks
-        if (data.tasks && Array.isArray(data.tasks)) {
-            const taskSelector = $('#task-selector');
-            taskSelector.empty();
-            data.tasks.forEach(task => {
-                taskSelector.append(`<option value="${task}">${task.charAt(0).toUpperCase() + task.slice(1)} Chat</option>`);
-            });
-        }
-
-        // Now load conversations after successful auth
-        return loadConversations();
-    })
-    .then(() => {
-        return loadLatestConversation();
-    })
-    .catch(error => {
-        console.error('Initialization error:', error);
-        showNotification('Please log in again', 'error');
-        sessionStorage.removeItem('token');
-        window.location.href = '/login';
-    });
- */
     // Check authentication status
     function checkAuth() {
         const token = sessionStorage.getItem('token');

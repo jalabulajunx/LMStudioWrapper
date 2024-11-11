@@ -98,7 +98,19 @@
                 if (response.ok) {
                     // Store token
                     sessionStorage.setItem('token', data.access_token);
-                    window.location.href = '/';
+
+                    // Make a test request to verify token before redirect
+                    const testResponse = await fetch('/api/auth/me', {
+                        headers: {
+                            'Authorization': `Bearer ${data.access_token}`
+                        }
+                    });
+
+                    if (testResponse.ok) {
+                        window.location.href = '/';
+                    } else {
+                        throw new Error('Token validation failed');
+                    }
                 } else {
                     throw new Error(data.detail || 'Login failed');
                 }
@@ -117,5 +129,5 @@
             }
         });
     });
-    </script>
+</script>
 {% endblock %}
