@@ -196,3 +196,76 @@ html, body {
 .copy-success {
     animation: copyFeedback 0.3s ease-in-out;
 }
+
+/* Add to your existing CSS */
+
+.loading-indicator {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-radius: 8px;
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+[data-bs-theme="dark"] .loading-indicator {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.typing-indicator .dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--bs-primary);
+    border-radius: 50%;
+    animation: typing 1.4s infinite;
+    opacity: 0.6;
+}
+
+.typing-indicator .dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-indicator .dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+.context-info {
+    display: flex;
+    align-items: center;
+    font-size: 0.875rem;
+    color: var(--bs-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+[data-bs-theme="dark"] .context-info {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+@keyframes typing {
+    0%, 100% {
+        transform: translateY(0);
+        opacity: 0.6;
+    }
+    50% {
+        transform: translateY(-4px);
+        opacity: 1;
+    }
+}
+
+/* Add responsive styles */
+@media (max-width: 768px) {
+    .context-info {
+        font-size: 0.75rem;
+    }
+    
+    .loading-indicator {
+        padding: 0.25rem;
+    }
+}

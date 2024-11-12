@@ -322,29 +322,43 @@ $(document).ready(function() {
     chatForm.on('submit', async function(e) {
         e.preventDefault();
         if (!checkAuth()) return;
-
+    
         const message = messageInput.val().trim();
         if (!message) return;
-
+    
         if (!currentConversationId) {
             await createNewConversation();
         }
-
+    
         appendMessage(message, 'user');
         messageInput.val('');
         stopButton.removeClass('d-none');
-
+    
         const responseDiv = appendMessage('', 'assistant');
+        const loadingIndicator = $('<div class="loading-indicator">').appendTo(responseDiv);
+        loadingIndicator.html(`
+            <div class="typing-indicator">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+            </div>
+            <div class="context-info">
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+                <span class="ms-2">Processing conversation context...</span>
+            </div>
+        `);
+    
         let fullResponse = '';
-
+        let isFirstToken = true;
+    
         // If there's an ongoing request, cancel it
         if (currentResponseController) {
             currentResponseController.abort();
         }
-
+    
         // Create new AbortController for this request
         currentResponseController = new AbortController();
-
+    
         try {
             const response = await fetch('/api/chat', {
                 method: 'POST',
@@ -356,42 +370,54 @@ $(document).ready(function() {
                     message: message,
                     conversation_id: currentConversationId
                 }),
-                signal: currentResponseController.signal  // Add abort signal
+                signal: currentResponseController.signal
             });
-
+    
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-
+    
             while (true) {
                 const {value, done} = await reader.read();
                 if (done) break;
-
+    
                 const text = decoder.decode(value);
                 const lines = text.split('\n');
-
+    
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
                         const data = line.slice(5).trim();
-
+    
                         if (data === '[DONE]') {
+                            loadingIndicator.remove();
                             stopButton.addClass('d-none');
                             await loadConversations(); // Refresh conversation list
                             break;
                         }
-
+    
                         try {
                             const parsed = JSON.parse(data);
                             if (parsed.error) {
                                 responseDiv.html(marked.parse('Error: ' + parsed.error));
+                                loadingIndicator.remove();
                                 stopButton.addClass('d-none');
-                                currentResponseController = null;  // Clear controller
+                                currentResponseController = null;
                                 break;
                             }
-
+    
                             if (parsed.token) {
+                                if (isFirstToken) {
+                                    // Remove the loading indicator when first token arrives
+                                    loadingIndicator.remove();
+                                    isFirstToken = false;
+                                }
                                 fullResponse += parsed.token;
                                 responseDiv.html(marked.parse(fullResponse));
                                 chatMessages.scrollTop(chatMessages[0].scrollHeight);
+                            }
+    
+                            // Handle progress updates
+                            if (parsed.progress) {
+                                loadingIndicator.find('.context-info span').text(parsed.progress);
                             }
                         } catch (error) {
                             console.error('Error parsing SSE data:', error);
@@ -402,14 +428,14 @@ $(document).ready(function() {
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.log('Response generation stopped by user');
-                // You might want to append a message indicating the stop
                 responseDiv.append('<br><em>Generation stopped by user</em>');
             } else {
                 console.error('Request error:', error);
                 responseDiv.html(marked.parse('Error: Failed to generate response'));
             }
+            loadingIndicator.remove();
             stopButton.addClass('d-none');
-            currentResponseController = null;  // Clear controller
+            currentResponseController = null;
         }
     });
 

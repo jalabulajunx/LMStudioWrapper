@@ -157,7 +157,7 @@ async def create_chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new chat message and get streaming response"""
+    """Create a new chat message and get streaming response with conversation context"""
     try:
         request_data = await request.json()
         message = request_data.get('message')
@@ -181,6 +181,22 @@ async def create_chat(
             db.commit()
             logger.debug(f"Created new conversation with ID: {conversation_id}")
 
+        # Get conversation history
+        history = db.query(ChatMessage)\
+            .filter(ChatMessage.conversation_id == conversation_id)\
+            .order_by(ChatMessage.timestamp)\
+            .all()
+        
+        # Format history for context
+        conversation_history = [
+            {
+                "content": msg.content,
+                "response": msg.response,
+                "timestamp": msg.timestamp.isoformat() if msg.timestamp else None
+            }
+            for msg in history
+        ]
+
         # Create chat message
         chat_message = ChatMessage(
             content=message,
@@ -203,9 +219,21 @@ async def create_chat(
             full_response = ""
             
             try:
-                async for token in llm_service.generate_stream(message):
+                # Send initial context processing message
+                yield f"data: {json.dumps({'progress': 'Processing conversation context...'})}\n\n"
+
+                # Get token estimate for context
+                messages = llm_service.format_messages(conversation_history, message)
+                estimated_tokens = llm_service.estimate_token_length(messages)
+                
+                # Send context size information
+                yield f"data: {json.dumps({'progress': f'Processing {estimated_tokens} estimated tokens...'})}\n\n"
+
+                async for token in llm_service.generate_stream(
+                    message, 
+                    conversation_history=conversation_history
+                ):
                     if await request.is_disconnected():
-                        # Client disconnected, stop generation
                         logger.info(f"Client disconnected, stopping generation for message {message_id}")
                         break
 
