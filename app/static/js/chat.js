@@ -1,13 +1,16 @@
 // app/static/js/chat.js
 $(document).ready(function() {
 
+
+    const uploadManager = new FileUploadManager();
+
     const chatForm = $('#chat-form');
     const messageInput = $('#message-input');
     const chatMessages = $('.chat-messages');
     const stopButton = $('#stop-button');
     const chatHistory = $('#chat-history');
-    let currentConversationId = null;
-    let eventSource = null;
+    
+    window.currentConversationId = null;
     let currentResponseController = null;
 
     
@@ -192,7 +195,7 @@ $(document).ready(function() {
             
             if (conversations && conversations.length > 0) {
                 const latestConv = conversations[0];
-                currentConversationId = latestConv.id;
+                window.currentConversationId = latestConv.id;
                 
                 const msgResponse = await fetch(`/api/conversations/${latestConv.id}`, {
                     headers: {
@@ -206,11 +209,33 @@ $(document).ready(function() {
                 
                 const data = await msgResponse.json();
                 
+                chatMessages.empty();
+                
+                // Display messages with file attachments
                 if (data.messages && Array.isArray(data.messages)) {
-                    chatMessages.empty();
                     data.messages.forEach(msg => {
-                        if (msg.content) appendMessage(msg.content, 'user');
-                        if (msg.response) appendMessage(msg.response, 'assistant');
+                        let content = msg.content;
+                        
+                        // Add file information if present
+                        if (msg.files && msg.files.length > 0) {
+                            content += '\n\nAttached Files:\n' + msg.files.map(file => 
+                                `📎 ${file.filename} (${formatFileSize(file.size)})`
+                            ).join('\n');
+                        }
+                        
+                        if (content) appendMessage(content, 'user');
+                        
+                        if (msg.response) {
+                            const responseDiv = appendMessage(msg.response, 'assistant');
+                            
+                            // Add generation info if available
+                            if (msg.generation_time) {
+                                const infoText = `Generated in ${msg.generation_time.toFixed(2)}s using ${msg.model_used || 'unknown model'}`;
+                                $('<div class="generation-info small text-muted mt-1"></div>')
+                                    .text(infoText)
+                                    .appendTo(responseDiv);
+                            }
+                        }
                     });
                 }
             }
@@ -258,10 +283,13 @@ $(document).ready(function() {
                                 </button>
                             </div>
                         </div>
-                        <div class="text-muted small text-truncate">${conv.last_message || ''}</div>
+                        <div class="text-muted small text-truncate">
+                            ${conv.last_message || ''}
+                            ${conv.has_files ? '<i class="bi bi-paperclip ms-1"></i>' : ''}
+                        </div>
                     `);
                 
-                if (conv.id === currentConversationId) {
+                if (conv.id === window.currentConversationId ) {
                     convDiv.addClass('active');
                 }
                 
@@ -269,13 +297,7 @@ $(document).ready(function() {
             });
         } catch (error) {
             console.error('Error loading conversations:', error);
-            if (error.status === 401) {
-                showNotification('Session expired. Please login again.', 'error');
-                sessionStorage.removeItem('token');
-                window.location.href = '/login';
-            } else {
-                showNotification('Failed to load conversations', 'error');
-            }
+            showNotification('Failed to load conversations', 'error');
         }
     }
 
@@ -287,14 +309,25 @@ $(document).ready(function() {
                     'Authorization': `Bearer ${sessionStorage.getItem('token')}`
                 }
             });
+            
+            if (!response.ok) {
+                throw new Error('Failed to create conversation');
+            }
+            
             const conversation = await response.json();
-            currentConversationId = conversation.id;
+            window.currentConversationId = conversation.id;  // Make sure it's on window scope
             chatMessages.empty();
             await loadConversations();
+            
+            // Update upload zone state if upload manager exists
+            if (window.uploadManager) {
+                window.uploadManager.updateUploadZoneState();
+            }
+            
         } catch (error) {
             console.error('Error creating conversation:', error);
             showNotification('Failed to create new conversation', 'error');
-            currentConversationId = crypto.randomUUID();
+            window.currentConversationId = crypto.randomUUID();
         }
     }
 
@@ -324,42 +357,73 @@ $(document).ready(function() {
         if (!checkAuth()) return;
     
         const message = messageInput.val().trim();
-        if (!message) return;
-    
-        if (!currentConversationId) {
+
+        let fileIds = [];  // Initialize fileIds array
+        
+        if (!message && (!window.uploadManager || window.uploadManager.files.size === 0)) {
+            return;  // No message and no files, nothing to send
+        }
+
+        if (!window.currentConversationId ) {
             await createNewConversation();
         }
-    
-        appendMessage(message, 'user');
-        messageInput.val('');
+
+        // Disable inputs during processing
+        messageInput.prop('disabled', true);
+        //sendButton.prop('disabled', true);
+        //uploadManager.disableUpload();
         stopButton.removeClass('d-none');
     
-        const responseDiv = appendMessage('', 'assistant');
-        const loadingIndicator = $('<div class="loading-indicator">').appendTo(responseDiv);
-        loadingIndicator.html(`
-            <div class="typing-indicator">
-                <span class="dot"></span>
-                <span class="dot"></span>
-                <span class="dot"></span>
-            </div>
-            <div class="context-info">
-                <div class="spinner-border spinner-border-sm" role="status"></div>
-                <span class="ms-2">Processing conversation context...</span>
-            </div>
-        `);
-    
-        let fullResponse = '';
-        let isFirstToken = true;
-    
-        // If there's an ongoing request, cancel it
-        if (currentResponseController) {
-            currentResponseController.abort();
-        }
-    
-        // Create new AbortController for this request
-        currentResponseController = new AbortController();
-    
         try {
+
+            // Upload files first if any
+            // Handle file uploads first
+            if (window.uploadManager && window.uploadManager.files.size > 0) {
+                try {
+                    fileIds = await window.uploadManager.uploadFiles() || [];
+                    console.log('Files uploaded:', fileIds);  // Debug log
+                } catch (uploadError) {
+                    console.error('File upload error:', uploadError);
+                    showNotification('File upload failed', 'error');
+                    return;  // Exit if file upload fails
+                }
+            }
+
+            // Append message with file info if present
+            let displayMessage = message;
+            if (fileIds && fileIds.length > 0) {
+                const fileCount = fileIds.length;
+                displayMessage += `\n\n[${fileCount} file${fileCount > 1 ? 's' : ''} attached]`;
+            }
+
+            appendMessage(message, 'user');
+            messageInput.val('');
+        
+            const responseDiv = appendMessage('', 'assistant');
+            const loadingIndicator = $('<div class="loading-indicator">').appendTo(responseDiv);
+            loadingIndicator.html(`
+                <div class="typing-indicator">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                </div>
+                <div class="context-info">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span class="ms-2">Processing conversation context...</span>
+                </div>
+            `);
+        
+            let fullResponse = '';
+            let isFirstToken = true;
+        
+            // If there's an ongoing request, cancel it
+            if (currentResponseController) {
+                currentResponseController.abort();
+            }
+        
+            // Create new AbortController for this request
+            currentResponseController = new AbortController();
+
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
@@ -368,7 +432,8 @@ $(document).ready(function() {
                 },
                 body: JSON.stringify({
                     message: message,
-                    conversation_id: currentConversationId
+                    conversation_id: window.currentConversationId ,
+                    file_ids: fileIds || []  // Always send an array, empty if no files
                 }),
                 signal: currentResponseController.signal
             });
@@ -433,7 +498,10 @@ $(document).ready(function() {
                 console.error('Request error:', error);
                 responseDiv.html(marked.parse('Error: Failed to generate response'));
             }
-            loadingIndicator.remove();
+        }finally {
+            messageInput.prop('disabled', false);
+            //sendButton.prop('disabled', false);
+            uploadManager.updateUploadZoneState();
             stopButton.addClass('d-none');
             currentResponseController = null;
         }
@@ -461,10 +529,13 @@ $(document).ready(function() {
 
     // Event Handlers for Conversation Management
     $('#new-chat').on('click', async function() {
+        window.currentConversationId  = null;
+        chatMessages.empty();
+        uploadManager.reset();
+        
         try {
             await createNewConversation();
-            chatMessages.empty();  // Clear the chat area
-            messageInput.focus();  // Focus on input for better UX
+            messageInput.focus();
         } catch (error) {
             console.error('Error creating new conversation:', error);
             showNotification('Failed to create new conversation', 'error');
@@ -474,32 +545,58 @@ $(document).ready(function() {
     chatHistory.on('click', '.conversation-item', async function(e) {
         if (!$(e.target).closest('.conversation-actions').length) {
             const convId = $(this).data('conversation-id');
-            currentConversationId = convId;
+            window.currentConversationId = convId;
             
             try {
                 const response = await fetch(`/api/conversations/${convId}`, {
                     headers: {
-                        'Authorization': `Bearer ${sessionStorage.getItem('token')}`
+                        'Authorization': `Bearer ${token}`
                     }
                 });
+                
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
-                const data = await response.json();
                 
-                // Clear existing messages
+                const data = await response.json();
                 chatMessages.empty();
                 
-                // Check if we have messages and they're in an array
+                // Display messages with file attachments
                 if (data.messages && Array.isArray(data.messages)) {
                     data.messages.forEach(msg => {
-                        if (msg.content) appendMessage(msg.content, 'user');
-                        if (msg.response) appendMessage(msg.response, 'assistant');
+                        let content = msg.content;
+                        
+                        // Add file information if present
+                        if (msg.files && msg.files.length > 0) {
+                            content += '\n\nAttached Files:\n' + msg.files.map(file => 
+                                `📎 ${file.filename} (${formatFileSize(file.size)})`
+                            ).join('\n');
+                        }
+                        
+                        if (content) appendMessage(content, 'user');
+                        
+                        if (msg.response) {
+                            const responseDiv = appendMessage(msg.response, 'assistant');
+                            
+                            // Add generation info if available
+                            if (msg.generation_time) {
+                                const infoText = `Generated in ${msg.generation_time.toFixed(2)}s using ${msg.model_used || 'unknown model'}`;
+                                $('<div class="generation-info small text-muted mt-1"></div>')
+                                    .text(infoText)
+                                    .appendTo(responseDiv);
+                            }
+                        }
                     });
                 }
                 
                 $('.conversation-item').removeClass('active');
                 $(this).addClass('active');
+                
+                // Update upload zone state
+                if (uploadManager) {
+                    uploadManager.updateUploadZoneState();
+                }
+                
             } catch (error) {
                 console.error('Error loading conversation:', error);
                 showNotification('Failed to load conversation messages', 'error');
@@ -546,7 +643,7 @@ $(document).ready(function() {
         
         const convItem = $(this).closest('.conversation-item');
         const convId = convItem.data('conversation-id');
-        const isCurrentConv = convId === currentConversationId;
+        const isCurrentConv = convId === window.currentConversationId ;
         
         if (!confirm('Are you sure you want to delete this conversation?')) {
             return;
@@ -604,13 +701,13 @@ $(document).ready(function() {
 
     //Copy conversation to clipboard handler
     async function copyConversation() {
-        if (!currentConversationId) {
+        if (!window.currentConversationId ) {
             showNotification('No conversation to copy', 'error');
             return;
         }
         
         try {
-            const response = await fetch(`/api/conversations/${currentConversationId}`, {
+            const response = await fetch(`/api/conversations/${window.currentConversationId }`, {
                 headers: {
                     'Authorization': `Bearer ${sessionStorage.getItem('token')}`
                 }
@@ -685,13 +782,13 @@ $(document).ready(function() {
 
     //Export chat event handler
     async function exportConversation() {
-        if (!currentConversationId) {
+        if (!window.currentConversationId ) {
             showNotification('No conversation to export', 'error');
             return;
         }
         
         try {
-            const response = await fetch(`/api/conversations/${currentConversationId}`, {
+            const response = await fetch(`/api/conversations/${window.currentConversationId }`, {
                 headers: {
                     'Authorization': `Bearer ${sessionStorage.getItem('token')}`
                 }
@@ -863,5 +960,14 @@ $(document).ready(function() {
         }
         
         return await response.json();
+    }
+
+    // Add helper function for file size formatting
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 });

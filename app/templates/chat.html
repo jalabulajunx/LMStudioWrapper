@@ -86,7 +86,25 @@
             <!-- Messages will be populated here -->
         </div>
         
+        <!-- Updated chat input section with file upload -->
         <div class="chat-input">
+            <!-- Add upload container before the chat form -->
+            <div id="upload-container" class="mb-3">
+                <div class="upload-zone" id="upload-zone">
+                    <i class="bi bi-cloud-upload upload-icon"></i>
+                    <p class="mb-1">Drag and drop files here or</p>
+                    <button class="btn btn-outline-primary btn-sm" id="file-select-btn" type="button">
+                        <i class="bi bi-folder"></i> Choose Files
+                    </button>
+                    <input type="file" id="file-input" multiple accept=".pdf,.docx,.txt,.csv" class="d-none">
+                    <div class="mt-1 small text-muted">
+                        Supported formats: PDF, DOCX, TXT, CSV (max 5 files, 30MB total)
+                    </div>
+                </div>
+                <div class="file-list d-none" id="file-list">
+                    <!-- Selected files will appear here -->
+                </div>
+            </div>
             <form id="chat-form" class="d-flex gap-2">
                 <textarea 
                     class="form-control" 
@@ -119,5 +137,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', path='/js/notifications.js') }}"></script>
+<script src="{{ url_for('static', path='/js/upload.js') }}"></script>
 <script src="{{ url_for('static', path='/js/chat.js') }}"></script>
 {% endblock %}

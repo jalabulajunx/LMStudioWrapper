@@ -1,5 +1,5 @@
 # app/main.py
-from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi import FastAPI, Request, Depends, HTTPException, status, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -8,12 +8,14 @@ from typing import Optional
 from .config import settings
 from .api import chat_router
 from .api.auth import router as auth_router
-from .database import engine, Base
+from .database import engine, Base, get_db
 from .auth.utils import get_current_user, get_current_admin_user
 from .models.user import User
 import logging
 from .api.admin import router as admin_router
 from .api.settings import router as settings_router
+from .api.upload import router as upload_router
+from .tasks.cleanup import schedule_cleanup
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,7 +53,19 @@ app.include_router(
     dependencies=[Depends(get_current_user)]
 )
 
+app.include_router(  # For upload
+    upload_router,
+    prefix="/api/upload",
+    tags=["upload"],
+    dependencies=[Depends(get_current_user)]
+)
+
 templates = Jinja2Templates(directory="app/templates")
+
+@app.on_event("startup")
+async def startup_event():
+    # Schedule cleanup tasks
+    schedule_cleanup(BackgroundTasks(), next(get_db()))
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):

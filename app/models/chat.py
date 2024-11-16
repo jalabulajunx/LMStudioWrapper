@@ -1,5 +1,5 @@
 # app/models/chat.py
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..database import Base
@@ -16,6 +16,7 @@ class Conversation(Base):
     # Relationships
     messages = relationship("ChatMessage", back_populates="conversation", cascade="all, delete-orphan")
     user = relationship("User", back_populates="conversations")
+    files = relationship("UploadedFile", back_populates="conversation", cascade="all, delete-orphan")
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
@@ -26,4 +27,13 @@ class ChatMessage(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     conversation_id = Column(String, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
     
+    # New columns for enhanced functionality
+    attached_files = Column(Text)  # JSON string of file IDs
+    token_count = Column(Integer)
+    generation_time = Column(Float)
+    model_used = Column(String)
+    is_complete = Column(Boolean, default=True)
+    
+    # Relationships
     conversation = relationship("Conversation", back_populates="messages")
+    files = relationship("UploadedFile", secondary="message_files", back_populates="messages")

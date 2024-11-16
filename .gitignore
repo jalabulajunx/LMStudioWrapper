@@ -6,3 +6,5 @@ app/services/__pycache__/*
 app/models/__pycache__/*
 app/schemas/__pycache__/*
 tests/__pycache__/*
+migrations/__pycache__/*
+migrations/versions/__pycache__/*

@@ -8,6 +8,7 @@ from ..models.chat import ChatMessage, Conversation
 from ..services.llm_service import LLMService
 from ..auth.utils import get_current_user
 from ..models.user import User
+from ..models.user import UploadedFile
 import uuid
 import json
 from datetime import datetime
@@ -78,24 +79,48 @@ async def get_conversation(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all messages in a conversation"""
+    """Get all messages in a conversation including file metadata"""
     try:
-        # Get conversation with user check
         conversation = db.query(Conversation).filter(
             Conversation.id == conversation_id,
             Conversation.user_id == current_user.id
         ).first()
             
         if not conversation:
-            logger.warning(f"Conversation {conversation_id} not found or unauthorized access attempt")
             raise HTTPException(status_code=404, detail="Conversation not found")
         
-        # Get messages
         messages = db.query(ChatMessage).filter(
             ChatMessage.conversation_id == conversation_id
         ).order_by(ChatMessage.timestamp).all()
         
-        logger.debug(f"Retrieved {len(messages)} messages for conversation {conversation_id}")
+        # Get file information for messages
+        message_data = []
+        for msg in messages:
+            files = []
+            if msg.attached_files:
+                file_ids = json.loads(msg.attached_files)
+                if file_ids:
+                    files = [{
+                        'id': f.id,
+                        'filename': f.filename,
+                        'content_type': f.content_type,
+                        'size': f.size
+                    } for f in db.query(UploadedFile).filter(
+                        UploadedFile.id.in_(file_ids),
+                        UploadedFile.is_active == True
+                    ).all()]
+            
+            message_data.append({
+                'id': msg.id,
+                'content': msg.content,
+                'response': msg.response,
+                'timestamp': msg.timestamp.isoformat() if msg.timestamp else None,
+                'files': files,
+                'token_count': msg.token_count,
+                'generation_time': msg.generation_time,
+                'model_used': msg.model_used,
+                'is_complete': msg.is_complete
+            })
         
         return {
             "conversation": {
@@ -104,24 +129,14 @@ async def get_conversation(
                 "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
                 "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None,
             },
-            "messages": [
-                {
-                    "id": msg.id,
-                    "content": msg.content,
-                    "response": msg.response,
-                    "timestamp": msg.timestamp.isoformat() if msg.timestamp else None
-                }
-                for msg in messages
-            ]
+            "messages": message_data
         }
+        
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting conversation: {str(e)}")
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Error retrieving conversation: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/conversations/{conversation_id}")
 async def delete_conversation(
@@ -157,52 +172,55 @@ async def create_chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new chat message and get streaming response with conversation context"""
+    """Create a new chat message with optional file attachments"""
     try:
         request_data = await request.json()
         message = request_data.get('message')
         conversation_id = request_data.get('conversation_id')
+        file_ids = request_data.get('file_ids', [])
         
-        if not message:
-            raise HTTPException(status_code=400, detail="Message is required")
+        if not message and not file_ids:
+            raise HTTPException(status_code=400, detail="Message or files required")
         
-        logger.debug(f"Processing chat request - Message: {message}, Conversation ID: {conversation_id}")
+
+        # Safe length check with default empty list
+        file_ids = file_ids if isinstance(file_ids, list) else []
+        logger.debug(f"Processing chat request - Message: {message}, Files: {len(file_ids)}")
         
         # Get or create conversation
         conversation = db.query(Conversation)\
             .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)\
             .first()
+            
         if not conversation:
-            conversation = Conversation(
-                id=conversation_id,
-                user_id=current_user.id
-            )
-            db.add(conversation)
-            db.commit()
-            logger.debug(f"Created new conversation with ID: {conversation_id}")
-
-        # Get conversation history
-        history = db.query(ChatMessage)\
-            .filter(ChatMessage.conversation_id == conversation_id)\
-            .order_by(ChatMessage.timestamp)\
-            .all()
-        
-        # Format history for context
-        conversation_history = [
-            {
-                "content": msg.content,
-                "response": msg.response,
-                "timestamp": msg.timestamp.isoformat() if msg.timestamp else None
-            }
-            for msg in history
-        ]
+            raise HTTPException(status_code=404, detail="Conversation not found")
+            
+        # Verify file ownership and attach files
+        attached_files = []
+        if file_ids:
+            files = db.query(UploadedFile).filter(
+                UploadedFile.id.in_(file_ids),
+                UploadedFile.user_id == current_user.id,
+                UploadedFile.conversation_id == conversation_id,
+                UploadedFile.is_active == True
+            ).all()
+            
+            if len(files) != len(file_ids):
+                raise HTTPException(status_code=400, detail="Invalid file IDs")
+                
+            attached_files = files
 
         # Create chat message
         chat_message = ChatMessage(
             content=message,
             conversation_id=conversation_id,
-            response=""
+            response="",
+            attached_files=json.dumps(file_ids) if file_ids else None
         )
+        
+        if attached_files:
+            chat_message.files.extend(attached_files)
+            
         db.add(chat_message)
         db.commit()
         db.refresh(chat_message)
@@ -217,8 +235,37 @@ async def create_chat(
         async def generate_response():
             llm_service = LLMService()
             full_response = ""
+            start_time = datetime.utcnow()
             
             try:
+                # Get conversation history
+                history = db.query(ChatMessage)\
+                    .filter(ChatMessage.conversation_id == conversation_id)\
+                    .order_by(ChatMessage.timestamp)\
+                    .all()
+                
+                # Format history for context
+                conversation_history = []
+                for msg in history:
+                    msg_content = msg.content
+                    if msg.attached_files:
+                        file_ids = json.loads(msg.attached_files)
+                        if file_ids:
+                            files = db.query(UploadedFile).filter(
+                                UploadedFile.id.in_(file_ids),
+                                UploadedFile.is_active == True
+                            ).all()
+                            file_contents = [f"[File: {f.filename}]\n{f.file_data.decode('utf-8')}"
+                                           for f in files if f.content_type in ['text/plain', 'text/csv']]
+                            if file_contents:
+                                msg_content += "\n\nAttached Files:\n" + "\n---\n".join(file_contents)
+                    
+                    conversation_history.append({
+                        'content': msg_content,
+                        'response': msg.response,
+                        'timestamp': msg.timestamp.isoformat() if msg.timestamp else None
+                    })
+                
                 # Send initial context processing message
                 yield f"data: {json.dumps({'progress': 'Processing conversation context...'})}\n\n"
 
@@ -238,16 +285,21 @@ async def create_chat(
                         break
 
                     full_response += token
-                    yield f"data: {json.dumps({'token': token, 'conversationId': conversation_id})}\n\n"
+                    yield f"data: {json.dumps({'token': token})}\n\n"
                 
-                logger.debug(f"Generated full response for message {message_id}")
+                # Calculate generation time
+                generation_time = (datetime.utcnow() - start_time).total_seconds()
                 
-                # Update the message with the complete response
+                # Update message with complete data
                 db_for_update = SessionLocal()
                 try:
                     msg = db_for_update.query(ChatMessage).get(message_id)
                     if msg:
                         msg.response = full_response
+                        msg.generation_time = generation_time
+                        msg.token_count = estimated_tokens
+                        msg.model_used = llm_service.get_current_model()
+                        msg.is_complete = True
                         db_for_update.commit()
                         logger.debug(f"Saved response to database for message {message_id}")
                 except Exception as db_error:
@@ -268,6 +320,7 @@ async def create_chat(
                     msg = db_for_update.query(ChatMessage).get(message_id)
                     if msg:
                         msg.response = f"Error: {error_msg}"
+                        msg.is_complete = False
                         db_for_update.commit()
                 except Exception as db_error:
                     logger.error(f"Database error while saving error response: {db_error}")

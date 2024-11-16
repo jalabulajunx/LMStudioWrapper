@@ -44,6 +44,7 @@ class LLMService:
                     headers=self.headers,
                     timeout=5
                 ) as response:
+                    logger.debug(f"Response: {response}")
                     return response.status == 200
         except Exception as e:
             logger.error(f"LM Studio server check failed: {str(e)}")
@@ -128,6 +129,13 @@ class LLMService:
         """
         messages = self.format_messages(conversation_history or [], prompt)
         
+        # Get model name at the start
+        try:
+            model_name = await self.get_model_name()
+        except Exception as e:
+            logger.error(f"Error getting model name: {str(e)}")
+            model_name = "unknown model"
+        
         # Merge default params with any provided params
         generation_params = self.default_params.copy()
         if params:
@@ -141,6 +149,10 @@ class LLMService:
         
         estimated_tokens = self.estimate_token_length(messages)
         logger.debug(f"Estimated context length: {estimated_tokens} tokens")
+        logger.debug(f"Using model(s): {model_name}")
+
+        # Add model_name to the object's state so it can be accessed later
+        self.current_model = model_name
         
         for attempt in range(self.max_retries):
             try:
@@ -185,3 +197,51 @@ class LLMService:
                 else:
                     yield f"\n\nError: Unable to connect to LM Studio after {self.max_retries} attempts. Please ensure the server is running and try again."
                     return
+
+    async def get_model_name(self) -> str:
+        """Get loaded model names from LM Studio.
+        Returns pipe-separated model names without trailing pipe if single model."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{self.base_url}/models",  # Correct endpoint
+                    headers=self.headers,
+                    timeout=5
+                ) as response:
+                    if response.status != 200:
+                        logger.error(f"Failed to get models: status {response.status}")
+                        return "unknown model"
+                    
+                    response_data = await response.json()
+                    logger.debug(f"Models response: {response_data}")
+                    
+                    # Check for the correct response structure
+                    if (isinstance(response_data, dict) and 
+                        response_data.get('object') == 'list' and 
+                        isinstance(response_data.get('data'), list)):
+                        
+                        models = response_data['data']
+                        if not models:
+                            logger.warning("No models found in response")
+                            return "no model loaded"
+                        
+                        # Extract model IDs
+                        model_names = [model['id'] for model in models if isinstance(model, dict) and 'id' in model]
+                        
+                        if not model_names:
+                            logger.warning("No valid model IDs found in response")
+                            return "unknown model"
+                        
+                        # Return pipe-separated names without trailing pipe for single model
+                        return " | ".join(model_names) if len(model_names) > 1 else model_names[0]
+                    else:
+                        logger.error("Unexpected response format from /models endpoint")
+                        return "invalid model format"
+                    
+        except Exception as e:
+            logger.error(f"Error getting model names: {str(e)}")
+            return "model info unavailable"
+
+    def get_current_model(self) -> str:
+        """Get the name of the model currently being used."""
+        return getattr(self, 'current_model', 'unknown model')

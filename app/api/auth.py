@@ -78,3 +78,20 @@ async def read_users_me(
         "tasks": [task.name for task in current_user.tasks],
         "last_login": current_user.last_login.isoformat() if current_user.last_login else None
     }
+
+@router.post("/logout")
+async def logout(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Logout user and cleanup their files"""
+    try:
+        cleanup_service = CleanupService(db)
+        await cleanup_service.cleanup_user_files(current_user.id)
+        return {"message": "Logged out successfully"}
+    except Exception as e:
+        logger.error(f"Error during logout cleanup: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Error during logout"
+        )

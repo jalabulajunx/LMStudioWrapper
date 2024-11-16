@@ -1,0 +1,143 @@
+/* app/static/css/upload.css */
+
+.upload-zone {
+    border: 2px dashed var(--bs-border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    background-color: var(--bs-body-bg);
+    transition: all 0.3s ease;
+    margin-bottom: 1rem;
+}
+
+.upload-zone.new-conversation {
+    border-color: var(--bs-primary);
+    background-color: rgba(var(--bs-primary-rgb), 0.05);
+}
+
+.upload-zone.drag-over {
+    border-color: var(--bs-primary);
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+}
+
+.upload-zone.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.upload-icon {
+    font-size: 2rem;
+    color: var(--bs-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.file-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 1rem;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    background-color: var(--bs-body-bg);
+}
+
+.file-item:last-child {
+    margin-bottom: 0;
+}
+
+.file-icon {
+    margin-right: 0.5rem;
+    color: var(--bs-secondary);
+}
+
+.file-info {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.file-name {
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-size {
+    font-size: 0.875rem;
+    color: var(--bs-secondary);
+}
+
+.file-remove {
+    padding: 0.25rem;
+    margin-left: 0.5rem;
+    cursor: pointer;
+    color: var(--bs-danger);
+    background: none;
+    border: none;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.file-remove:hover {
+    opacity: 1;
+}
+
+.upload-progress {
+    height: 4px;
+    margin-top: 0.5rem;
+    border-radius: 2px;
+    background-color: var(--bs-primary);
+    transition: width 0.3s ease;
+}
+
+.error-message {
+    color: var(--bs-danger);
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+}
+
+/* Dark mode adjustments */
+[data-bs-theme="dark"] .upload-zone {
+    background-color: var(--bs-dark);
+}
+
+[data-bs-theme="dark"] .upload-zone.drag-over {
+    background-color: rgba(var(--bs-primary-rgb), 0.2);
+}
+
+[data-bs-theme="dark"] .upload-zone.new-conversation {
+    background-color: rgba(var(--bs-primary-rgb), 0.15);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .upload-zone {
+        padding: 1rem;
+    }
+    
+    .upload-icon {
+        font-size: 1.5rem;
+    }
+    
+    .file-list {
+        max-height: 150px;
+    }
+}
+
+/* Animation for drag and drop */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+.upload-zone.drag-over {
+    animation: pulse 0.3s ease-in-out;
+}
